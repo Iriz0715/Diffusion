@@ -146,13 +146,13 @@ class ResBlock(layers.Layer):
 
 # UNet class
 class UNet(layers.Layer):
-    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch=1, out_c=1):
+    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch=2, out_c=1):    ## in_channel = 2 (x+c)
         super().__init__()
         assert all(i < len(ch_mult) for i in attn), 'attn index out of bound'
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(T, ch, tdim)
 
-        self.head = layers.Conv3D(ch, kernel_size=3, padding='same')
+        self.head = layers.Conv3D(ch, kernel_size=3, padding='same', input_shape=(None, None, None, in_ch))
         self.downblocks = []
         chs = [ch]  # record output channel when downsample for upsample
         now_ch = ch
@@ -208,8 +208,8 @@ class UNet(layers.Layer):
         return h
 
 # 使用示例
-model = UNet(T=100, ch=64, ch_mult=[1, 2, 4], attn=[1], num_res_blocks=2, dropout=0.1, in_ch=1, out_c=1)
-x = tf.random.normal((1, 96, 96, 96, 1))  # 输入数据
+model = UNet(T=100, ch=64, ch_mult=[1, 2, 4], attn=[1], num_res_blocks=2, dropout=0.1, in_ch=2, out_c=1)
+x = tf.random.normal((1, 96, 96, 96, 2))  # 输入数据
 t = tf.random.uniform((1,), minval=0, maxval=100, dtype=tf.int32)  # 时间步长
 y = model(x, t)
 print(y.shape)  # 检查输出形状
