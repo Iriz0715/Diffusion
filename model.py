@@ -1,254 +1,215 @@
 import math
-import torch
-from torch import nn
-from torch.nn import init
-from torch.nn import functional as F
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.initializers import Constant
 
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
+class GroupNormalization(layers.Layer):
+    def __init__(self, groups=16, axis=-1, epsilon=1e-5):
+        super(GroupNormalization, self).__init__()
+        self.groups = groups
+        self.axis = axis
+        self.epsilon = epsilon
 
+    def call(self, x):
+        # x shape: [batch_size, ..., channels]
+        batch_size, height, width, depth, channels = tf.shape(x)
+        G = self.groups
+        C = channels
+        
+        # Reshape to [batch_size, G, -1, channels // G]
+        x = tf.reshape(x, (batch_size, height, width, depth, G, C // G))
+        mean = tf.reduce_mean(x, axis=[1, 2, 3], keepdims=True)
+        var = tf.reduce_mean(tf.square(x - mean), axis=[1, 2, 3], keepdims=True)
 
-class TimeEmbedding(nn.Module):
+        x = (x - mean) / tf.sqrt(var + self.epsilon)
+        x = tf.reshape(x, (batch_size, height, width, depth, channels))
+        
+        return x
+    
+
+# Swish activation function
+class Swish(layers.Layer):
+    def call(self, x):
+        return x * tf.sigmoid(x)
+
+# Time Embedding class
+class TimeEmbedding(layers.Layer):
     def __init__(self, T, d_model, dim):
+        super().__init__()
         assert d_model % 2 == 0
-        super().__init__()
-        emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
-        emb = torch.exp(-emb)
-        pos = torch.arange(T).float()
-        emb = pos[:, None] * emb[None, :]
-        assert list(emb.shape) == [T, d_model // 2]
-        emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
-        assert list(emb.shape) == [T, d_model // 2, 2]
-        emb = emb.view(T, d_model)
+        emb = tf.range(0, d_model, delta=2, dtype=tf.float32) / d_model * math.log(10000)
+        emb = tf.exp(-emb)
+        pos = tf.range(T, dtype=tf.float32)
+        emb = tf.expand_dims(pos, axis=-1) * emb  # [T, d_model//2]
+        emb = tf.stack([tf.sin(emb), tf.cos(emb)], axis=-1)  # [T, d_model//2, 2]
+        emb = tf.reshape(emb, (T, d_model))  # [T, d_model]
 
-        self.timembedding = nn.Sequential(
-            nn.Embedding.from_pretrained(emb),
-            nn.Linear(d_model, dim),
+        self.timembedding = models.Sequential([
+            layers.Embedding(input_dim=T, output_dim=d_model, embeddings_initializer=Constant(emb)),
+            layers.Dense(dim),
             Swish(),
-            nn.Linear(dim, dim),
-        )
-        self.initialize()
+            layers.Dense(dim),
+        ])
 
-    def initialize(self):
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                init.xavier_uniform_(module.weight)
-                init.zeros_(module.bias)
+    def call(self, t):
+        return self.timembedding(t)
 
-    def forward(self, t):
-        emb = self.timembedding(t)
-        return emb
-
-
-class DownSample(nn.Module):
+# DownSample class
+class DownSample(layers.Layer):
     def __init__(self, in_ch):
         super().__init__()
-        self.main = nn.Conv3d(in_ch, in_ch, 3, stride=2, padding=1)
-        self.initialize()
+        self.main = layers.Conv3D(in_ch, kernel_size=3, strides=2, padding='same')
 
-    def initialize(self):
-        init.xavier_uniform_(self.main.weight)
-        init.zeros_(self.main.bias)
+    def call(self, x, temb):   # 这个 temb 没用到，应该可以删去
+        return self.main(x)
 
-    def forward(self, x, temb):
-        x = self.main(x)
-        return x
-
-
-class UpSample(nn.Module):
+# UpSample class
+class UpSample(layers.Layer):
     def __init__(self, in_ch):
         super().__init__()
-        self.main = nn.Conv3d(in_ch, in_ch, 3, stride=1, padding=1)
-        self.initialize()
+        self.main = layers.Conv3DTranspose(in_ch, kernel_size=3, strides=2, padding='same')
 
-    def initialize(self):
-        init.xavier_uniform_(self.main.weight)
-        init.zeros_(self.main.bias)
+    def call(self, x, temb):   # 这个 temb 没用到，应该可以删去
+        # 使用 Conv3DTranspose 进行上采样
+        return self.main(x)
 
-    def forward(self, x, temb):
-        _, _, H, W, D = x.shape
-        x = F.interpolate(
-            x, scale_factor=2, mode='nearest')
-        x = self.main(x)
-        return x
-
-
-class AttnBlock(nn.Module):
+# Attention Block class
+class AttnBlock(layers.Layer):
     def __init__(self, in_ch):
         super().__init__()
-        self.group_norm = nn.GroupNorm(16, in_ch)
-        self.proj_q = nn.Conv3d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj_k = nn.Conv3d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj_v = nn.Conv3d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.proj = nn.Conv3d(in_ch, in_ch, 1, stride=1, padding=0)
-        self.initialize()
+        self.group_norm = GroupNormalization(groups=16, axis=-1)
+        self.proj_q = layers.Conv3D(in_ch, kernel_size=1)
+        self.proj_k = layers.Conv3D(in_ch, kernel_size=1)
+        self.proj_v = layers.Conv3D(in_ch, kernel_size=1)
+        self.proj = layers.Conv3D(in_ch, kernel_size=1)
 
-    def initialize(self):
-        for module in [self.proj_q, self.proj_k, self.proj_v, self.proj]:
-            init.xavier_uniform_(module.weight)
-            init.zeros_(module.bias)
-        init.xavier_uniform_(self.proj.weight, gain=1e-5)
-
-    def forward(self, x):
-        B, C, H, W, D = x.shape
+    def call(self, x):
+        B, H, W, D, C = tf.shape(x)
         h = self.group_norm(x)
         q = self.proj_q(h)
         k = self.proj_k(h)
         v = self.proj_v(h)
 
-        q = q.permute(0, 2, 3, 4, 1).view(B, H * W * D, C)
-        k = k.view(B, C, H * W * D)
-        w = torch.bmm(q, k) * (int(C) ** (-0.5))
-        assert list(w.shape) == [B, H * W * D, H * W * D]
-        w = F.softmax(w, dim=-1)
+        q = tf.transpose(q, perm=[0, 2, 3, 4, 1])  # [B, H, W, D, C] -> [B, H, W, D, C]
+        q = tf.reshape(q, (B, H * W * D, C))  # [B, H*W*D, C]
+        k = tf.reshape(k, (B, C, H * W * D))  # [B, C, H*W*D]
+        
+        w = tf.matmul(q, k) * (C ** -0.5)
+        w = tf.nn.softmax(w, axis=-1)
 
-        v = v.permute(0, 2, 3, 4, 1).view(B, H * W * D, C)
-        h = torch.bmm(w, v)
-        assert list(h.shape) == [B, H * W * D, C]
-        h = h.view(B, H, W, D, C).permute(0, 4, 1, 2, 3)
+        v = tf.transpose(v, perm=[0, 2, 3, 4, 1])  # [B, H, W, D, C] -> [B, H, W, D, C]
+        v = tf.reshape(v, (B, H * W * D, C))  # [B, H*W*D, C]
+        
+        h = tf.matmul(w, v)  # [B, H*W*D, C]
+        h = tf.reshape(h, (B, H, W, D, C))  # [B, H, W, D, C]
+        h = tf.transpose(h, perm=[0, 4, 1, 2, 3])  # [B, C, H, W, D]
         h = self.proj(h)
 
         return x + h
 
-
-class ResBlock(nn.Module):
+# ResBlock class
+class ResBlock(layers.Layer):
     def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
         super().__init__()
-        self.block1 = nn.Sequential(
-            nn.GroupNorm(16, in_ch),
+        self.block1 = models.Sequential([
+            GroupNormalization(groups=16, axis=-1),
             Swish(),
-            nn.Conv3d(in_ch, out_ch, 3, stride=1, padding=1),
-        )
-        self.temb_proj = nn.Sequential(
+            layers.Conv3D(out_ch, kernel_size=3, padding='same'),
+        ])
+        self.temb_proj = models.Sequential([
             Swish(),
-            nn.Linear(tdim, out_ch),
-        )
-        self.block2 = nn.Sequential(
-            nn.GroupNorm(16, out_ch),
+            layers.Dense(out_ch),
+        ])
+        self.block2 = models.Sequential([
+            GroupNormalization(groups=16, axis=-1),
             Swish(),
-            nn.Dropout(dropout),
-            nn.Conv3d(out_ch, out_ch, 3, stride=1, padding=1),
-        )
-        if in_ch != out_ch:
-            self.shortcut = nn.Conv3d(in_ch, out_ch, 1, stride=1, padding=0)
-        else:
-            self.shortcut = nn.Identity()
-        if attn:
-            self.attn = AttnBlock(out_ch)
-        else:
-            self.attn = nn.Identity()
-        self.initialize()
+            layers.Dropout(dropout),
+            layers.Conv3D(out_ch, kernel_size=3, padding='same'),
+        ])
+        self.shortcut = layers.Conv3D(out_ch, kernel_size=1, padding='same') if in_ch != out_ch else layers.Layer()
+        self.attn = AttnBlock(out_ch) if attn else layers.Layer()
 
-    def initialize(self):
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                init.xavier_uniform_(module.weight)
-                init.zeros_(module.bias)
-        init.xavier_uniform_(self.block2[-1].weight, gain=1e-5)
-
-    def forward(self, x, temb):
+    def call(self, x, temb):
         h = self.block1(x)
-        h += self.temb_proj(temb)[:, :, None, None, None]
-        h = self.block2(h)
+        temb = self.temb_proj(temb)  # [batch_size, out_ch]
+        
+        # 确保 temb 的形状为 [batch_size, 1, 1, 1, out_ch]
+        temb = tf.expand_dims(temb, axis=1)  # [batch_size, 1, out_ch]
+        temb = tf.expand_dims(temb, axis=1)  # [batch_size, 1, 1, out_ch]
+        temb = tf.expand_dims(temb, axis=1)  # [batch_size, 1, 1, 1, out_ch]
 
-        h = h + self.shortcut(x)
-        # h = self.attn(h)
+        h += temb  # 形状匹配
+        h = self.block2(h)
+        h += self.shortcut(x)
         return h
 
-
-class UNet(nn.Module):
-    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout,in_ch=1,out_c=1):
+# UNet class
+class UNet(layers.Layer):
+    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch=1, out_c=1):
         super().__init__()
-        assert all([i < len(ch_mult) for i in attn]), 'attn index out of bound'
+        assert all(i < len(ch_mult) for i in attn), 'attn index out of bound'
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(T, ch, tdim)
-        # print('in_ch',in_ch)
 
-        self.head = nn.Conv3d(in_ch, ch, kernel_size=3, stride=1, padding=1)
-        self.downblocks = nn.ModuleList()
-        chs = [ch]  # record output channel when dowmsample for upsample
+        self.head = layers.Conv3D(ch, kernel_size=3, padding='same')
+        self.downblocks = []
+        chs = [ch]  # record output channel when downsample for upsample
         now_ch = ch
         for i, mult in enumerate(ch_mult):
             out_ch = ch * mult
             for _ in range(num_res_blocks):
-                self.downblocks.append(ResBlock(
-                    in_ch=now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
+                self.downblocks.append(ResBlock(in_ch=now_ch, out_ch=out_ch, tdim=tdim, dropout=dropout, attn=(i in attn)))
                 now_ch = out_ch
                 chs.append(now_ch)
             if i != len(ch_mult) - 1:
                 self.downblocks.append(DownSample(now_ch))
                 chs.append(now_ch)
 
-        self.middleblocks = nn.ModuleList([
+        self.middleblocks = [
             ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
             ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
-        ])
+        ]
 
-        self.upblocks = nn.ModuleList()
+        self.upblocks = []
         for i, mult in reversed(list(enumerate(ch_mult))):
             out_ch = ch * mult
             for _ in range(num_res_blocks + 1):
-                self.upblocks.append(ResBlock(
-                    in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
+                self.upblocks.append(ResBlock(in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim, dropout=dropout, attn=(i in attn)))
                 now_ch = out_ch
             if i != 0:
                 self.upblocks.append(UpSample(now_ch))
-        assert len(chs) == 0
 
-        self.tail = nn.Sequential(
-            nn.GroupNorm(16, now_ch),
+        self.tail = models.Sequential([
+            GroupNormalization(groups=16, axis=-1),
             Swish(),
-            nn.Conv3d(now_ch, out_c, 3, stride=1, padding=1)
-        )
-        self.initialize()
+            layers.Conv3D(out_c, kernel_size=3, padding='same')
+        ])
 
-    def initialize(self):
-        init.xavier_uniform_(self.head.weight)
-        init.zeros_(self.head.bias)
-        init.xavier_uniform_(self.tail[-1].weight, gain=1e-5)
-        init.zeros_(self.tail[-1].bias)
-
-    def forward(self, x, t):
-        # Timestep embedding
+    def call(self, x, t):
         temb = self.time_embedding(t)
-        # Downsampling
         h = self.head(x)
 
-        # print('h',h.shape)
         hs = [h]
         for layer in self.downblocks:
             h = layer(h, temb)
             hs.append(h)
-        # Middle
+
         for layer in self.middleblocks:
             h = layer(h, temb)
-        # Upsampling
+
         for layer in self.upblocks:
             if isinstance(layer, ResBlock):
-                h = torch.cat([h, hs.pop()], dim=1)
+                h = tf.concat([h, hs.pop()], axis=-1)  # 在通道维度拼接
             h = layer(h, temb)
+
         h = self.tail(h)
 
-        assert len(hs) == 0
         return h
 
-from torchsummary import summary
-if __name__ == '__main__':
-    # batch_size = 1
-    # model = UNet(
-    #     T=1000, ch=32, ch_mult=[1, 2, 2, 2], attn=[1],
-    #     num_res_blocks=1, dropout=0.1).cuda()
-    # x = torch.randn(batch_size, 1, 96, 96,96).cuda()
-    # t = torch.randint(1000, (batch_size, )).cuda()
-    # y = model(x, t)
-    # print(y.shape)
-    # tshape=t.shape
-    # summary(model,[x,t])
-
-    time_embedding = TimeEmbedding(1000, 32,128)
-    emb = time_embedding(torch.Tensor([20]).type(torch.int32))
-    print(emb.shape)
+# 使用示例
+model = UNet(T=100, ch=64, ch_mult=[1, 2, 4], attn=[1], num_res_blocks=2, dropout=0.1, in_ch=1, out_c=1)
+x = tf.random.normal((1, 96, 96, 96, 1))  # 输入数据
+t = tf.random.uniform((1,), minval=0, maxval=100, dtype=tf.int32)  # 时间步长
+y = model(x, t)
+print(y.shape)  # 检查输出形状
