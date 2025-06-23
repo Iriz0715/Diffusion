@@ -1,99 +1,82 @@
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 import numpy as np
-
 from functools import partial
+import tensorflow as tf
+from tensorflow.keras import Model
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.losses import MeanSquaredError
 
-def extract(v, t, x_shape):
-    """
-    Extract some coefficients at specified timesteps, then reshape to
-    [batch_size, 1, 1, 1, 1, ...] for broadcasting purposes.
-    """
-    device = t.device
-    v=v.to(device)
-    out = torch.gather(v, index=t, dim=0).float().to(device)
-    return out.view([t.shape[0]] + [1] * (len(x_shape) - 1))
+def _extract(a, t, x_shape):
+  """
+  Extract some coefficients at specified timesteps,
+  then reshape to [batch_size, 1, 1, 1, 1, ...] for broadcasting purposes.
+  """
+  bs, = t.shape
+  assert x_shape[0] == bs
+  out = tf.gather(tf.cast(a, tf.float32), t)
+  assert out.shape == [bs]
+  return tf.reshape(out, [bs] + ((len(x_shape) - 1) * [1]))
 
 
-class GaussianDiffusionTrainer(nn.Module):
+class GaussianDiffusionTrainer(tf.keras.layers.Layer):
     def __init__(self, model, beta_1, beta_T, T):
         super().__init__()
 
         self.model = model
         self.T = T
 
-        self.register_buffer(
-            'betas', torch.linspace(beta_1, beta_T, T).double())
+        self.betas = tf.Variable(tf.cast(tf.linspace(beta_1, beta_T, T), tf.float64), trainable=False)
         alphas = 1. - self.betas
-        alphas_bar = torch.cumprod(alphas, dim=0)
+        alphas_bar = tf.math.cumprod(alphas, axis=0)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer(
-            'sqrt_alphas_bar', torch.sqrt(alphas_bar))
-        self.register_buffer(
-            'sqrt_one_minus_alphas_bar', torch.sqrt(1. - alphas_bar))
+        self.sqrt_alphas_bar = tf.sqrt(alphas_bar)
+        self.sqrt_one_minus_alphas_bar = tf.sqrt(1. - alphas_bar)
 
-
-    def sample(self,x_0,t,in_ch=1):
-        t = t*torch.ones(size=(x_0.shape[0], ))
-        device=x_0.device
-        t= torch.tensor(t).type(torch.int64).to(device)
-        # print(t)
-        # print(x_0.shape)
-        noise = torch.randn_like(x_0)
-        # print('noise',noise.shape)
+    def sample(self, x_0, t, in_ch=1):
+        t = tf.ones((x_0.shape[0],), dtype=tf.int32) * t
+        noise = tf.random.normal(tf.shape(x_0))
 
         x_t = (
-            extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
-            extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise)
-        
+            _extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
+            _extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
+        )
         return x_t
 
+    def call(self, x_0, context=None):
+        t = tf.random.uniform((x_0.shape[0],), minval=0, maxval=self.T, dtype=tf.int32)
+        noise = tf.random.normal(tf.shape(x_0))
 
-    def forward(self, x_0,context=None):##把低dose图像作为噪声
-        """
-        Algorithm 1.
-        """
-        t = torch.randint(self.T, size=(x_0.shape[0], ), device=x_0.device)
-        noise = torch.randn_like(x_0)
-        # print('noise',noise.shape)
         x_t = (
-            extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
-            extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise)
-        if context !=None:
-            loss = F.mse_loss(self.model(x_t, t,context), noise, reduction='none')
+            _extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
+            _extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
+        )
+
+        mse = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)
+
+        if context is not None:
+            model_output = self.model([x_t, t, context])
         else:
-            loss = F.mse_loss(self.model(x_t, t), noise, reduction='none')
+            model_output = self.model([x_t, t])
+
+        loss = mse(noise, model_output)
         return loss
 
 
-class GaussianDiffusionSampler(nn.Module):
-    def __init__(self, model, beta_1, beta_T, T,infer_T=None,squeue=None):
-        '''
-        推理时直接使用改T有问题,infer_T用于在某些截断
-        squeue:用于保存过程中的结果,None只保留最终的结果,为数字时保留完整的,squeue=10
-        '''
+
+class GaussianDiffusionSampler(tf.keras.layers.Layer):
+    def __init__(self, model, beta_1, beta_T, T, infer_T=None, squeue=None):
         super().__init__()
 
         self.model = model
         self.T = T
-        if infer_T ==None:
-            self.infer_T =T
-        else:
-            self.infer_T = infer_T
+        self.infer_T = T if infer_T is None else infer_T
         self.squeue = squeue
-
-        # self.register_buffer('betas', torch.linspace(beta_1, beta_T, T).float())
-        # self.register_buffer('betas', torch.linspace(beta_1 ** 0.5, beta_T ** 0.5, T, dtype=torch.float64) ** 2)
 
         linear_start = beta_1
         linear_end = beta_T
 
         betas = (
-                torch.linspace(linear_start ** 0.5, linear_end ** 0.5, T, dtype=torch.float64) ** 2
+            tf.linspace(linear_start ** 0.5, linear_end ** 0.5, T, dtype=tf.float64) ** 2
         )
         betas = betas.numpy()
 
@@ -101,254 +84,182 @@ class GaussianDiffusionSampler(nn.Module):
         alphas_cumprod = np.cumprod(alphas, axis=0)
         alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
 
-        timesteps, = betas.shape
-        self.num_timesteps = int(timesteps)
+        self.num_timesteps = int(T)
         self.linear_start = linear_start
         self.linear_end = linear_end
-        assert alphas_cumprod.shape[0] == self.num_timesteps, 'alphas have to be defined for each timestep'
 
-        to_torch = partial(torch.tensor, dtype=torch.float32)
+        self.betas = tf.Variable(betas, trainable=False, dtype=tf.float32)
+        self.alphas_cumprod = tf.Variable(alphas_cumprod, trainable=False, dtype=tf.float32)
+        self.alphas_cumprod_prev = tf.Variable(alphas_cumprod_prev, trainable=False, dtype=tf.float32)
 
-        self.register_buffer('betas', to_torch(betas))
-        self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
-        self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
+        self.sqrt_alphas_cumprod = tf.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = tf.sqrt(1. - self.alphas_cumprod)
+        self.log_one_minus_alphas_cumprod = tf.math.log(1. - self.alphas_cumprod)
+        self.sqrt_recip_alphas_cumprod = tf.sqrt(1. / self.alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = tf.sqrt(1. / self.alphas_cumprod - 1)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer('sqrt_alphas_cumprod', to_torch(np.sqrt(alphas_cumprod)))
-        self.register_buffer('sqrt_one_minus_alphas_cumprod', to_torch(np.sqrt(1. - alphas_cumprod)))
-        self.register_buffer('log_one_minus_alphas_cumprod', to_torch(np.log(1. - alphas_cumprod)))
-        self.register_buffer('sqrt_recip_alphas_cumprod', to_torch(np.sqrt(1. / alphas_cumprod)))
-        self.register_buffer('sqrt_recipm1_alphas_cumprod', to_torch(np.sqrt(1. / alphas_cumprod - 1)))
-
-        self.v_posterior = 0
         posterior_variance = (1 - self.v_posterior) * betas * (1. - alphas_cumprod_prev) / (
                     1. - alphas_cumprod) + self.v_posterior * betas
-        # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
-        self.register_buffer('posterior_variance', to_torch(posterior_variance))
-        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.register_buffer('posterior_log_variance_clipped', to_torch(np.log(np.maximum(posterior_variance, 1e-20))))
+        self.posterior_variance = tf.Variable(posterior_variance, trainable=False, dtype=tf.float32)
+        self.posterior_log_variance_clipped = tf.Variable(np.log(np.maximum(posterior_variance, 1e-20)), trainable=False, dtype=tf.float32)
 
-        self.register_buffer('posterior_mean_coef1', to_torch(
-            betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)))
-        self.register_buffer('posterior_mean_coef2', to_torch(
-            (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
-
-
+        self.posterior_mean_coef1 = tf.Variable(
+            betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod), trainable=False, dtype=tf.float32)
+        self.posterior_mean_coef2 = tf.Variable(
+            (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod), trainable=False, dtype=tf.float32)
 
     def q_posterior(self, x_start, x_t, t):
         posterior_mean = (
-                extract(self.posterior_mean_coef1, t, x_t.shape) * x_start +
-                extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
+                _extract(self.posterior_mean_coef1, t, x_t.shape) * x_start +
+                _extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
-        posterior_variance = extract(self.posterior_variance, t, x_t.shape)
-        posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
+        posterior_variance = _extract(self.posterior_variance, t, x_t.shape)
+        posterior_log_variance_clipped = _extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def predict_start_from_noise(self, x_t, t, noise):
         return (
-                extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
-                extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
+                _extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
+                _extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
         )
 
-    def p_mean_variance(self, x_t, t,context=None):
-        # below: only log_variance is used in the KL computations
-        # var = torch.cat([self.posterior_var[1:2], self.betas[1:]])
-
-
-
-        if context !=None:
-            eps = self.model(x_t, t,context)
+    def p_mean_variance(self, x_t, t, context=None):
+        if context is not None:
+            eps = self.model([x_t, t, context])
         else:
-            eps = self.model(x_t, t)
-        # xt_prev_mean = self.predict_start_from_noise(x_t, t, eps=eps)
+            eps = self.model([x_t, t])
+
         x_recon = self.predict_start_from_noise(x_t, t=t, noise=eps)
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x_t, t=t)
-
-
-    
-
         return model_mean, posterior_log_variance
 
-    def forward(self, x_T,context=None):
-        """
-        Algorithm 2.
-        """
+    def call(self, x_T, context=None):
         x_t = x_T
-        infer_num =0
+        infer_num = 0
 
-
-        x_squeue = torch.zeros(list(x_t.shape)).cuda()
-        print('T',self.T,'infer_T',self.infer_T)
+        x_squeue = tf.zeros_like(x_t)
+        print('T', self.T, 'infer_T', self.infer_T)
         for time_step in reversed(range(self.infer_T)):
-            # print(time_step)
-            t = x_t.new_ones([x_T.shape[0], ], dtype=torch.long) * time_step
+            t = tf.ones((x_T.shape[0],), dtype=tf.int32) * time_step
 
-            # x_t = x_t +x_T ###加入隐变量x_T，正常情况记得删除
-            model_mean, model_log_variance= self.p_mean_variance(x_t=x_t, t=t, context= context)
-            # no noise when t == 0
+            model_mean, model_log_variance = self.p_mean_variance(x_t=x_t, t=t, context=context)
             if time_step > 0:
-                noise = torch.randn_like(x_t)
+                noise = tf.random.normal(tf.shape(x_t))
             else:
                 noise = 0
-            # x_t = mean + torch.sqrt(var) * noise
 
-            nonzero_mask = (1 - (t == 0).float()).reshape(x_T.shape[0], *((1,) * (len(x_T.shape) - 1)))
+            nonzero_mask = tf.cast(1 - tf.cast(t == 0, tf.float32), tf.float32)
+            nonzero_mask = tf.reshape(nonzero_mask, [x_T.shape[0]] + [1] * (len(x_T.shape) - 1))
 
-            x_t =  model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-    
+            x_t = model_mean + nonzero_mask * tf.exp(0.5 * model_log_variance) * noise
 
+            assert tf.reduce_sum(tf.cast(tf.math.is_nan(x_t), tf.int32)) == 0, "nan in tensor."
+            infer_num += 1
+            if self.squeue is not None:
+                if infer_num % int(self.squeue) == 0:
+                    x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, -1, 1)], axis=1)
 
-
-            assert torch.isnan(x_t).int().sum() == 0, "nan in tensor."
-            infer_num +=1
-            if self.squeue != None:
-                if infer_num % int(self.squeue)==0:
-                    x_squeue = torch.cat([x_squeue,torch.clip(x_t, -1, 1)],dim=1)
-                    # x_squeue.append(torch.clip(x_t, -1, 1))
-
-            
-            # if infer_num==self.infer_T:
-            #     break
         x_0 = x_t
-        x0 = torch.clip(x_0, -1, 1)
-        if self.squeue != None:
-            # val= torch.tensor([item.cpu().detach().numpy() for item in val]).cuda()
+        x0 = tf.clip_by_value(x_0, -1, 1)
+        if self.squeue is not None:
+            x0 = x_squeue[:, 1:, :, :, :]
 
-            # x_squeue = torch.Tensor(x_squeue.cpu().detach().numpy()).cuda()
-            x0 = x_squeue[:,1:,:,:,:]
-    
         return x0
 
 
 
-
-
-
-
-
-
-
-
-
-class Guide_DiffusionSampler(nn.Module): ###
-    def __init__(self, model, beta_1, beta_T, T,infer_T=None,squeue=None):
-        '''
-        推理时直接使用改T有问题,infer_T用于在某些截断
-        squeue:用于保存过程中的结果,None只保留最终的结果,为数字时保留完整的,squeue=10
-        '''
+class GuideDiffusionSampler(tf.keras.layers.Layer):
+    def __init__(self, model, beta_1, beta_T, T, infer_T=None, squeue=None):
         super().__init__()
 
         self.model = model
         self.T = T
-        if infer_T ==None:
-            self.infer_T =T
-        else:
-            self.infer_T = infer_T
+        self.infer_T = T if infer_T is None else infer_T
         self.squeue = squeue
 
-        self.register_buffer('betas', torch.linspace(beta_1, beta_T, T).double())
+        self.betas = tf.Variable(tf.linspace(beta_1, beta_T, T), trainable=False, dtype=tf.float64)
         alphas = 1. - self.betas
-        alphas_bar = torch.cumprod(alphas, dim=0)
-        alphas_bar_prev = F.pad(alphas_bar, [1, 0], value=1)[:T]
+        alphas_bar = tf.math.cumprod(alphas, axis=0)
+        alphas_bar_prev = tf.concat([[1.], alphas_bar[:-1]], axis=0)
 
-        self.register_buffer('coeff1', torch.sqrt(1. / alphas))
-        self.register_buffer('coeff2', self.coeff1 * (1. - alphas) / torch.sqrt(1. - alphas_bar))
+        self.coeff1 = tf.sqrt(1. / alphas)
+        self.coeff2 = self.coeff1 * (1. - alphas) / tf.sqrt(1. - alphas_bar)
 
-        self.register_buffer('posterior_var', self.betas * (1. - alphas_bar_prev) / (1. - alphas_bar))
+        self.posterior_var = self.betas * (1. - alphas_bar_prev) / (1. - alphas_bar)
 
-        self.register_buffer(
-            'betas', torch.linspace(beta_1, beta_T, T).double())
-        alphas = 1. - self.betas
-        alphas_bar = torch.cumprod(alphas, dim=0)
+        self.sqrt_alphas_bar = tf.sqrt(alphas_bar)
+        self.sqrt_one_minus_alphas_bar = tf.sqrt(1. - alphas_bar)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer(
-            'sqrt_alphas_bar', torch.sqrt(alphas_bar))
-        self.register_buffer(
-            'sqrt_one_minus_alphas_bar', torch.sqrt(1. - alphas_bar))
-    
+    def guide_sample(self, x_0, t):
+        t = tf.ones((x_0.shape[0],), dtype=tf.int32) * t
+        noise = tf.random.normal(tf.shape(x_0))
 
-
-    def guide_sample(self,x_0,t):
-        t = t*torch.ones(size=(x_0.shape[0], ))
-        device=x_0.device
-        t= torch.tensor(t).type(torch.int64).to(device)
-        # print(t)
-        noise = torch.randn_like(x_0)
-        # print('noise',noise.shape)
         x_t = (
-            extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
-            extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise)
-        
+            _extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
+            _extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
+        )
         return x_t
 
     def predict_xt_prev_mean_from_eps(self, x_t, t, eps):
-        assert x_t.shape == eps.shape
         return (
-            extract(self.coeff1, t, x_t.shape) * x_t -
-            extract(self.coeff2, t, x_t.shape) * eps
+            _extract(self.coeff1, t, x_t.shape) * x_t -
+            _extract(self.coeff2, t, x_t.shape) * eps
         )
 
     def p_mean_variance(self, x_t, t):
-        # below: only log_variance is used in the KL computations
-        var = torch.cat([self.posterior_var[1:2], self.betas[1:]])
-        var = extract(var, t, x_t.shape)
+        var = tf.concat([self.posterior_var[1:2], self.betas[1:]], axis=0)
+        var = _extract(var, t, x_t.shape)
 
-        eps = self.model(x_t, t)
+        eps = self.model([x_t, t])
         xt_prev_mean = self.predict_xt_prev_mean_from_eps(x_t, t, eps=eps)
 
         return xt_prev_mean, var
 
-    def forward(self, x_T):
-        """
-        Algorithm 2.
-        """
-        x_t = x_T[:,0:1,...]
-        x_guide = x_T[:,1:,...]
+    def call(self, x_T):
+        x_t = x_T[:, 0:1, ...]
+        x_guide = x_T[:, 1:, ...]
         for time_step in reversed(range(self.infer_T)):
-            # print(time_step)
-            t = x_t.new_ones([x_T.shape[0], ], dtype=torch.long) * time_step
-            mean, var= self.p_mean_variance(x_t=x_t, t=t)
-            # no noise when t == 0
+            t = tf.ones((x_T.shape[0],), dtype=tf.int32) * time_step
+            mean, var = self.p_mean_variance(x_t=x_t, t=t)
             if time_step > 0:
-                noise = torch.randn_like(x_t)
+                noise = tf.random.normal(tf.shape(x_t))
             else:
                 noise = 0
-            x_t = mean + torch.sqrt(var) * noise
+            x_t = mean + tf.sqrt(var) * noise
 
-            ##使用guide:
-            # x_t = x_t#0.9*x_t + 0.1*self.guide_sample(x_guide,time_step)
+            x_t = x_t  # ((self.infer_T-time_step)/self.infer_T)*x_t  +(time_step/self.infer_T)*self.guide_sample(x_guide,time_step)
 
-            x_t = x_t # ((self.infer_T-time_step)/self.infer_T)*x_t  +(time_step/self.infer_T)*self.guide_sample(x_guide,time_step)
-            
-
-            # print('var',var)
-            assert torch.isnan(x_t).int().sum() == 0, "nan in tensor."
+            assert tf.reduce_sum(tf.cast(tf.math.is_nan(x_t), tf.int32)) == 0, "nan in tensor."
         x_0 = x_t
-        return torch.clip(x_0, -1, 1)   
+        return tf.clip_by_value(x_0, -1, 1)
 
 
-# from model import UNet
-# from torchsummary import summary
-# if __name__ == "__main__":
-#     net_model=UNet(
-#         T=1000, ch=32, ch_mult=[1, 2, 2, 2], attn=[1],
-#         num_res_blocks=2, dropout=0.1).cuda()
 
 
-#     trainer = GaussianDiffusionTrainer(
-#     net_model, 1e-4, 0.02,1000).cuda()
+
+import h5py
+import matplotlib.pyplot as plt
+
+if __name__ =="__main__":
+  file_path = '/home/jiayizhang/project/diffusion/DDPM/CBCT2CTTest/synthrad2023_brain_2BA001.hdf5'
+  with h5py.File(file_path, 'r') as f_h5:
+    input_images = np.asarray(f_h5['input_images'], dtype=np.float32) # cbct
+    output_images = np.asarray(f_h5['output_images'], dtype=np.float32) # ct
+
+    image_tensor = tf.convert_to_tensor(input_images, dtype=tf.float32)
+    # image_tensor = tf.expand_dims(image_tensor, axis=0)  # 增加批次维度
+    # image_tensor = tf.expand_dims(image_tensor, axis=-1)  # 增加通道维度
+    print(image_tensor.shape)
+
+    model = None  # 这里不需要实际的模型，因为我们只进行加噪处理
+    trainer = GaussianDiffusionTrainer(model, beta_1=0.0001, beta_T=0.02, T=1000)
+
+    # forward 加噪
+    noisy_image = trainer.sample(image_tensor, t=50)
+
+    noisy_image = np.clip(noisy_image, -1, 1)  # 限制到 [-1, 1] 范围
+    print(noisy_image.shape)  # 输出加噪后图像的形状
 
 
-#     x = torch.randn(2, 1, 96, 96,96).cuda()
-#     loss=trainer(x)
-#     print(x.shape)
-#     summary(trainer,[1,96,96,96])
-#     print(loss.shape)
-
-
-        # sample_eval = GaussianDiffusionSampler(net_model, 1e-4, 0.02,100)
-
-        # y_s=sample_eval(x)
-        # print(y_s.shape)
-
+    plt.imsave('/home/jiayizhang/project/diffusion/DDPM/zjy/test_forward.png', noisy_image[219//2,:,:], cmap='gray')
+    plt.imsave('/home/jiayizhang/project/diffusion/DDPM/zjy/test_orig.png', input_images[219//2,:,:], cmap='gray')
