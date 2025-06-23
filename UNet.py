@@ -145,7 +145,7 @@ class ResBlock(layers.Layer):
         return h
 
 # UNet class
-class UNet(layers.Layer):
+class UNet(models.Model):
     def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch=2, out_c=1):    ## in_channel = 2 (x+c)
         super().__init__()
         assert all(i < len(ch_mult) for i in attn), 'attn index out of bound'
@@ -207,9 +207,16 @@ class UNet(layers.Layer):
 
         return h
 
-# 使用示例
-model = UNet(T=100, ch=64, ch_mult=[1, 2, 4], attn=[1], num_res_blocks=2, dropout=0.1, in_ch=2, out_c=1)
-x = tf.random.normal((1, 96, 96, 96, 2))  # 输入数据
-t = tf.random.uniform((1,), minval=0, maxval=100, dtype=tf.int32)  # 时间步长
-y = model(x, t)
-print(y.shape)  # 检查输出形状
+if __name__ == '__main__':
+  batch_size = 1
+  in_ch = 2
+  out_c = 1
+  model = UNet(
+      T=1000, ch=32, ch_mult=[1, 2, 2, 2], attn=[1],
+      num_res_blocks=1, dropout=0.1, in_ch=2, out_c=1)
+  x = tf.random.normal((batch_size, 96, 96,96, in_ch))
+  t = tf.random.uniform((1,), minval=0, maxval=100, dtype=tf.int32)
+  y = model(x, t)
+  print(y.shape)
+  print(t.shape)
+  model.summary()
