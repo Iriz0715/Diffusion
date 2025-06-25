@@ -6,24 +6,32 @@ from tensorflow.keras.initializers import Constant
 
 class GroupNormalization(layers.Layer):
     def __init__(self, groups=16, axis=-1, epsilon=1e-5):
-        super(GroupNormalization, self).__init__()
+        super().__init__()
         self.groups = groups
         self.axis = axis
         self.epsilon = epsilon
 
     def call(self, x):
-        # x shape: [batch_size, ..., channels]
-        batch_size, height, width, depth, channels = tf.shape(x)
-        G = self.groups
-        C = channels
-        
-        # Reshape to [batch_size, G, -1, channels // G]
-        x = tf.reshape(x, (batch_size, height, width, depth, G, C // G))
-        mean = tf.reduce_mean(x, axis=[1, 2, 3], keepdims=True)
-        var = tf.reduce_mean(tf.square(x - mean), axis=[1, 2, 3], keepdims=True)
+        batch_size = tf.shape(x)[0]
+        height = tf.shape(x)[1]
+        width = tf.shape(x)[2]
+        depth = tf.shape(x)[3]
+        channels = tf.shape(x)[4]
 
+        # 确保通道数可以被组数整除
+        G = min(self.groups, channels)
+        while channels % G != 0:
+            G = G - 1
+
+        x = tf.reshape(x, [-1, G, channels // G])
+        
+        mean = tf.reduce_mean(x, axis=[0, 2], keepdims=True)
+        var = tf.reduce_mean(tf.square(x - mean), axis=[0, 2], keepdims=True)
+        
         x = (x - mean) / tf.sqrt(var + self.epsilon)
-        x = tf.reshape(x, (batch_size, height, width, depth, channels))
+        
+        # 恢复原始形状
+        x = tf.reshape(x, [batch_size, height, width, depth, channels])
         
         return x
     
@@ -146,7 +154,7 @@ class ResBlock(layers.Layer):
 
 # UNet class
 class UNet(models.Model):
-    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch=2, out_c=1):    ## in_channel = 2 (x+c)
+    def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch, out_c):    ## in_channel = 2 (x+c)
         super().__init__()
         assert all(i < len(ch_mult) for i in attn), 'attn index out of bound'
         tdim = ch * 4
@@ -183,10 +191,23 @@ class UNet(models.Model):
         self.tail = models.Sequential([
             GroupNormalization(groups=16, axis=-1),
             Swish(),
-            layers.Conv3D(out_c, kernel_size=3, padding='same')
+            layers.Conv3D(out_c, kernel_size=3, padding='same')   # 输出channel = 1
         ])
 
-    def call(self, x, t):
+    def call(self, x, t, c):
+        """
+        参数:
+            x: 输入图像 [B, H, W, D, C]
+            t: 时间步 [B]
+            c: 条件 (CBCT图像) [B, H, W, D, C]
+        """
+        # 确保输入 shape 正确
+        tf.debugging.assert_rank(x, 5, "Input x should be rank 5")
+        tf.debugging.assert_rank(t, 1, "Time t should be rank 1")
+        if c is not None:
+            tf.debugging.assert_rank(c, 5, "Context c should be rank 5")
+     
+        x = tf.concat([x, c], axis=-1)  # channel 维度拼接 x 和 c
         temb = self.time_embedding(t)
         h = self.head(x)
 
@@ -200,7 +221,7 @@ class UNet(models.Model):
 
         for layer in self.upblocks:
             if isinstance(layer, ResBlock):
-                h = tf.concat([h, hs.pop()], axis=-1)  # 在通道维度拼接
+                h = tf.concat([h, hs.pop()], axis=-1)  # channel维度拼接
             h = layer(h, temb)
 
         h = self.tail(h)
@@ -209,14 +230,13 @@ class UNet(models.Model):
 
 if __name__ == '__main__':
   batch_size = 1
-  in_ch = 2
-  out_c = 1
   model = UNet(
       T=1000, ch=32, ch_mult=[1, 2, 2, 2], attn=[1],
-      num_res_blocks=1, dropout=0.1, in_ch=2, out_c=1)
-  x = tf.random.normal((batch_size, 96, 96,96, in_ch))
+      num_res_blocks=1, dropout=0.1, in_ch=2,out_c=1)
+  x = tf.random.normal((batch_size, 96, 96,96, 1))
+  c = tf.random.normal((batch_size, 96, 96,96, 1))
   t = tf.random.uniform((1,), minval=0, maxval=100, dtype=tf.int32)
-  y = model(x, t)
-  print(y.shape)
-  print(t.shape)
+  y = model(x, t, c)
+  print(y.shape)  # [1, 96, 96, 96, 1]
+  print(t.shape)  # [1]
   model.summary()
