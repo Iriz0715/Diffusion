@@ -5,7 +5,7 @@ from Diffusion import GaussianDiffusionTrainer, GaussianDiffusionSampler
 from unet3d_zjy import UNet
 import matplotlib.pyplot as plt
 
-# 1. 设置训练参数
+# 1. 设置参数
 BATCH_SIZE = 1
 EPOCHS = 100
 # LEARNING_RATE = 1e-4
@@ -49,7 +49,6 @@ train_dataset = create_dataset(
 )
 
 
-# 7. 保存中间生成结果的函数
 def save_samples(epoch, condition, save_path=None):
     x_T = tf.random.normal((1, 128, 128, 128, 1))  # 随机噪声作为起始点
     generated = sampler.reverse(
@@ -57,15 +56,13 @@ def save_samples(epoch, condition, save_path=None):
         context=condition
     )
     
-    # 获取中心切片索引
+
     center_x = generated.shape[1] // 2
     center_y = generated.shape[2] // 2
     center_z = generated.shape[3] // 2
     
-    # 创建图像网格
     plt.figure(figsize=(15, 5))
     
-    # 显示三个正交面的中心切片
     plt.subplot(131)
     plt.imshow(generated[0, center_x, :, :, 0], cmap='gray')
     plt.title(f'Sagittal (epoch {epoch})')
@@ -81,11 +78,9 @@ def save_samples(epoch, condition, save_path=None):
     plt.title(f'Axial (epoch {epoch})')
     plt.axis('off')
     
-    # 保存图像
     plt.savefig(save_path)
     plt.close()
     
-    # 打印调试信息
     print(f"Generated shape: {generated.shape}")
     print(f"Center slices at: {center_x}, {center_y}, {center_z}")
 
@@ -97,6 +92,10 @@ def sample():
       i += 1
       save_samples(EPOCHS, cbct, save_path=f"{sample_dir}/final_sample_{i}.png")
       print(f"Sample {i} saved.")
+
+
+
+
 
 if __name__ == "__main__":
     # 设置内存增长
