@@ -42,7 +42,7 @@ class GaussianDiffusionTrainer(tf.keras.layers.Layer):
         )
         return x_t
 
-    def call(self, x_0, context=None):
+    def forward (self, x_0, context=None):
         t = tf.random.uniform((x_0.shape[0],), minval=0, maxval=self.T, dtype=tf.int32)
         noise = tf.random.normal(tf.shape(x_0))
 
@@ -54,9 +54,9 @@ class GaussianDiffusionTrainer(tf.keras.layers.Layer):
         mse = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)
 
         if context is not None:
-            model_output = self.model([x_t, t, context])
+            model_output = self.model(x_t, t, context)
         else:
-            model_output = self.model([x_t, t])
+            model_output = self.model(x_t, t)
 
         loss = mse(noise, model_output)
         return loss
@@ -75,8 +75,9 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
         linear_start = beta_1
         linear_end = beta_T
 
-        betas = (
-            tf.linspace(linear_start ** 0.5, linear_end ** 0.5, T, dtype=tf.float64) ** 2
+        betas = tf.cast(
+            tf.linspace(linear_start ** 0.5, linear_end ** 0.5, T) ** 2,
+            tf.float64
         )
         betas = betas.numpy()
 
@@ -98,6 +99,7 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
         self.sqrt_recip_alphas_cumprod = tf.sqrt(1. / self.alphas_cumprod)
         self.sqrt_recipm1_alphas_cumprod = tf.sqrt(1. / self.alphas_cumprod - 1)
 
+        self.v_posterior = 0.0  # This is a hyperparameter, can be adjusted
         posterior_variance = (1 - self.v_posterior) * betas * (1. - alphas_cumprod_prev) / (
                     1. - alphas_cumprod) + self.v_posterior * betas
         self.posterior_variance = tf.Variable(posterior_variance, trainable=False, dtype=tf.float32)
@@ -125,15 +127,15 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
 
     def p_mean_variance(self, x_t, t, context=None):
         if context is not None:
-            eps = self.model([x_t, t, context])
+            eps = self.model(x_t, t, context)
         else:
-            eps = self.model([x_t, t])
+            eps = self.model(x_t, t)
 
         x_recon = self.predict_start_from_noise(x_t, t=t, noise=eps)
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x_t, t=t)
         return model_mean, posterior_log_variance
 
-    def call(self, x_T, context=None):
+    def reverse (self, x_T, context=None):
         x_t = x_T
         infer_num = 0
 
@@ -239,6 +241,7 @@ class GuideDiffusionSampler(tf.keras.layers.Layer):
 
 import h5py
 import matplotlib.pyplot as plt
+from unet3d_zjy import UNet
 
 if __name__ =="__main__":
   file_path = '/home/jiayizhang/project/diffusion/DDPM/CBCT2CTTest/synthrad2023_brain_2BA001.hdf5'
@@ -250,6 +253,10 @@ if __name__ =="__main__":
     # image_tensor = tf.expand_dims(image_tensor, axis=0)  # 增加批次维度
     # image_tensor = tf.expand_dims(image_tensor, axis=-1)  # 增加通道维度
     print(image_tensor.shape)
+
+
+    batch_size = 1
+
 
     model = None  # 这里不需要实际的模型，因为我们只进行加噪处理
     trainer = GaussianDiffusionTrainer(model, beta_1=0.0001, beta_T=0.02, T=1000)
