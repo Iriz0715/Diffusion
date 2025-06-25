@@ -36,7 +36,7 @@ def load_data_hdf5(file_path):
         output_images = np.asarray(f_h5['output_images'], dtype=np.float32)
     return input_images, output_images
 
-def create_tf_dataset(data_dir, batch_size=32, shuffle=False):
+def create_dataset(data_dir, batch_size=32, shuffle=True):
     files = sorted([os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.hdf5')])
     img_a = []
     img_b = []
@@ -46,8 +46,8 @@ def create_tf_dataset(data_dir, batch_size=32, shuffle=False):
         except OSError:     # 4 和 5 无法读取
             print(file_path)
             continue
-        input_images = crop_pad3D(input_images, [256,256,256])
-        output_images = crop_pad3D(output_images,[256,256,256])
+        input_images = crop_pad3D(input_images, [128,128,128])
+        output_images = crop_pad3D(output_images,[128,128,128])
         input_images = np.expand_dims(input_images, axis=-1)  # 添加channel维度
         output_images = np.expand_dims(output_images, axis=-1)
         img_a.append(input_images)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
   file_path = '/home/jiayizhang/project/diffusion/DDPM/CBCT2CTTest'
   batch_size = 1
 
-  dataset = create_tf_dataset(file_path, batch_size)
+  dataset = create_dataset(file_path, batch_size)
 
   # 迭代数据集
   for input_batch, output_batch in dataset:
