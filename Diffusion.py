@@ -42,6 +42,8 @@ class GaussianDiffusionTrainer(tf.keras.layers.Layer):
         )
         return x_t
 
+
+    ## train时每个batch t 随机，epoch决定train次数
     def forward (self, x_0, context=None):
         t = tf.random.uniform((x_0.shape[0],), minval=0, maxval=self.T, dtype=tf.int32)
         noise = tf.random.normal(tf.shape(x_0))
@@ -135,11 +137,13 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x_t, t=t)
         return model_mean, posterior_log_variance
 
+
+    ## sample 时每个batch t 相同，逐t反向去噪，T决定采样次数
     def reverse (self, x_T, context=None):
         x_t = x_T
         infer_num = 0
 
-        x_squeue = tf.zeros_like(x_t)
+        x_squeue = tf.zeros_like(x_t) # [batch_size, H, W, D, C]
         print('T', self.T, 'infer_T', self.infer_T)
         for time_step in reversed(range(self.infer_T)):
             t = tf.ones((x_T.shape[0],), dtype=tf.int32) * time_step
@@ -159,82 +163,14 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
             infer_num += 1
             if self.squeue is not None:
                 if infer_num % int(self.squeue) == 0:
-                    x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, -1, 1)], axis=1)
+                    x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, -1, 1)], axis=-1)  #  [batch_size, H, W, D, save_steps]在channel维度叠加
 
         x_0 = x_t
         x0 = tf.clip_by_value(x_0, -1, 1)
         if self.squeue is not None:
-            x0 = x_squeue[:, 1:, :, :, :]
+            x0 = x_squeue[..., 1:]  # 去掉第一个0数据
 
         return x0
-
-
-
-class GuideDiffusionSampler(tf.keras.layers.Layer):
-    def __init__(self, model, beta_1, beta_T, T, infer_T=None, squeue=None):
-        super().__init__()
-
-        self.model = model
-        self.T = T
-        self.infer_T = T if infer_T is None else infer_T
-        self.squeue = squeue
-
-        self.betas = tf.Variable(tf.linspace(beta_1, beta_T, T), trainable=False, dtype=tf.float64)
-        alphas = 1. - self.betas
-        alphas_bar = tf.math.cumprod(alphas, axis=0)
-        alphas_bar_prev = tf.concat([[1.], alphas_bar[:-1]], axis=0)
-
-        self.coeff1 = tf.sqrt(1. / alphas)
-        self.coeff2 = self.coeff1 * (1. - alphas) / tf.sqrt(1. - alphas_bar)
-
-        self.posterior_var = self.betas * (1. - alphas_bar_prev) / (1. - alphas_bar)
-
-        self.sqrt_alphas_bar = tf.sqrt(alphas_bar)
-        self.sqrt_one_minus_alphas_bar = tf.sqrt(1. - alphas_bar)
-
-    def guide_sample(self, x_0, t):
-        t = tf.ones((x_0.shape[0],), dtype=tf.int32) * t
-        noise = tf.random.normal(tf.shape(x_0))
-
-        x_t = (
-            _extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
-            _extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
-        )
-        return x_t
-
-    def predict_xt_prev_mean_from_eps(self, x_t, t, eps):
-        return (
-            _extract(self.coeff1, t, x_t.shape) * x_t -
-            _extract(self.coeff2, t, x_t.shape) * eps
-        )
-
-    def p_mean_variance(self, x_t, t):
-        var = tf.concat([self.posterior_var[1:2], self.betas[1:]], axis=0)
-        var = _extract(var, t, x_t.shape)
-
-        eps = self.model([x_t, t])
-        xt_prev_mean = self.predict_xt_prev_mean_from_eps(x_t, t, eps=eps)
-
-        return xt_prev_mean, var
-
-    def call(self, x_T):
-        x_t = x_T[:, 0:1, ...]
-        x_guide = x_T[:, 1:, ...]
-        for time_step in reversed(range(self.infer_T)):
-            t = tf.ones((x_T.shape[0],), dtype=tf.int32) * time_step
-            mean, var = self.p_mean_variance(x_t=x_t, t=t)
-            if time_step > 0:
-                noise = tf.random.normal(tf.shape(x_t))
-            else:
-                noise = 0
-            x_t = mean + tf.sqrt(var) * noise
-
-            x_t = x_t  # ((self.infer_T-time_step)/self.infer_T)*x_t  +(time_step/self.infer_T)*self.guide_sample(x_guide,time_step)
-
-            assert tf.reduce_sum(tf.cast(tf.math.is_nan(x_t), tf.int32)) == 0, "nan in tensor."
-        x_0 = x_t
-        return tf.clip_by_value(x_0, -1, 1)
-
 
 
 
