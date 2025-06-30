@@ -12,27 +12,23 @@ class GroupNormalization(layers.Layer):
         self.epsilon = epsilon
 
     def call(self, x):
-        batch_size = tf.shape(x)[0]
-        height = tf.shape(x)[1]
-        width = tf.shape(x)[2]
-        depth = tf.shape(x)[3]
-        channels = tf.shape(x)[4]
-
-        # 确保通道数可以被组数整除
-        G = min(self.groups, channels)
-        while channels % G != 0:
-            G = G - 1
-
-        x = tf.reshape(x, [-1, G, channels // G])
+        # 分块处理以减少内存使用
+        shape = tf.shape(x)
+        N, H, W, D, C = shape[0], shape[1], shape[2], shape[3], shape[4]
+        G = min(self.groups, C)
         
-        mean = tf.reduce_mean(x, axis=[0, 2], keepdims=True)
-        var = tf.reduce_mean(tf.square(x - mean), axis=[0, 2], keepdims=True)
+        # 确保通道数可被组数整除
+        while C % G != 0:
+            G = G - 1
+            
+        x = tf.reshape(x, [N, H * W * D, G, C // G])
+        
+        # 使用更小的块计算统计量
+        mean = tf.reduce_mean(x, axis=[1], keepdims=True)
+        var = tf.reduce_mean(tf.square(x - mean), axis=[1], keepdims=True)
         
         x = (x - mean) / tf.sqrt(var + self.epsilon)
-        
-        # 恢复原始形状
-        x = tf.reshape(x, [batch_size, height, width, depth, channels])
-        
+        x = tf.reshape(x, [N, H, W, D, C])
         return x
     
 
@@ -156,6 +152,16 @@ class ResBlock(layers.Layer):
 class UNet(models.Model):
     def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout, in_ch, out_c):    ## in_channel = 2 (x+c)
         super().__init__()
+        self.T = T
+        self.ch = ch
+        self.ch_mult = ch_mult
+        self.attn = attn
+        self.num_res_blocks = num_res_blocks
+        self.dropout = dropout
+        self.in_ch = in_ch
+        self.out_c = out_c
+
+
         assert all(i < len(ch_mult) for i in attn), 'attn index out of bound'
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(T, ch, tdim)
