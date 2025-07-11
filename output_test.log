@@ -1,0 +1,2442 @@
+2025-07-11 16:51:57.570900: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX2 AVX_VNNI FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-07-11 16:51:57.640695: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-07-11 16:51:57.658221: E tensorflow/stream_executor/cuda/cuda_blas.cc:2981] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-07-11 16:51:57.924310: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libnvinfer.so.7'; dlerror: libnvinfer.so.7: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: /usr/local/cuda/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64:
+2025-07-11 16:51:57.924354: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libnvinfer_plugin.so.7'; dlerror: libnvinfer_plugin.so.7: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: /usr/local/cuda/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64:
+2025-07-11 16:51:57.924357: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Cannot dlopen some TensorRT libraries. If you would like to use Nvidia GPU with TensorRT, please make sure the missing libraries mentioned above are installed properly.
+/home/jiayizhang/diffusion/tf2.10/lib/python3.10/site-packages/tensorflow_addons/utils/tfa_eol_msg.py:23: UserWarning: 
+
+TensorFlow Addons (TFA) has ended development and introduction of new features.
+TFA has entered a minimal maintenance and release mode until a planned end of life in May 2024.
+Please modify downstream libraries to take dependencies from other repositories in our TensorFlow community (e.g. Keras, Keras-CV, and Keras-NLP). 
+
+For more information see: https://github.com/tensorflow/addons/issues/2807 
+
+  warnings.warn(
+/home/jiayizhang/diffusion/tf2.10/lib/python3.10/site-packages/tensorflow_addons/utils/ensure_tf_install.py:53: UserWarning: Tensorflow Addons supports using Python ops for all Tensorflow versions above or equal to 2.13.0 and strictly below 2.16.0 (nightly versions are not supported). 
+ The versions of TensorFlow you are currently using is 2.10.0 and is not supported. 
+Some things might work, some things might not.
+If you were to encounter a bug, do not file an issue.
+If you want to make sure you're using a tested and supported configuration, either change the TensorFlow version or the TensorFlow Addons's version. 
+You can find the compatibility matrix in TensorFlow Addon's readme:
+https://github.com/tensorflow/addons
+  warnings.warn(
+2025-07-11 16:51:58.675279: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:58.681478: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:58.682950: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:58.684457: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX2 AVX_VNNI FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-07-11 16:51:58.685244: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:58.686434: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:58.687495: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:59.011544: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:59.012635: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:59.013710: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:980] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2025-07-11 16:51:59.015083: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 12849 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4080, pci bus id: 0000:01:00.0, compute capability: 8.9
+training_paths: ['/mnt/newdisk/mri2ct/data_training/train/synthrad2025_1HNA129.hdf5', '/mnt/newdisk/mri2ct/data_training/train/synthrad2025_1THA040.hdf5', '/mnt/newdisk/mri2ct/data_training/train/synthrad2023_brain_1BA222.hdf5'] ... 674
+testing_paths ['/mnt/newdisk/mri2ct/data_training/test/synthrad2025_1HNA048.hdf5', '/mnt/newdisk/mri2ct/data_training/test/synthrad2023_brain_1BB177.hdf5', '/mnt/newdisk/mri2ct/data_training/test/synthrad2023_brain_1BB048.hdf5'] ... 339
+Model configuration: {'is_natural_image': False, 'features_root': 64, 'conv_size': 3, 'use_upsampling': True, 'deconv_size': 3, 'layers': 4, 'max_filters': 320, 'dilation': False, 'loss_type': 'l1', 'batch_size': 8, 'deep_supervision': False, 'attention': False, 'iters_per_epoch': 1280, 'epoch': 250, 'save_period': 100, 'norm_config': {'norm': False, 'norm_channels': [0], 'norm_mean': None, 'norm_std': None}, 'sampling_config': None, 'simulation_config': None, 'mirror_config': {'training_mirror': False, 'testing_mirror': False, 'mirror_axes': [1, 2], 'rot90': True}, 'augmentation_params': {}, 'initial_lr': 0.01, 'end_lr': 1e-06, 'lr_decay': 0.1, 'optimizer_type': 'Adam', 'sgd_momentum': 0.99, 'fg_sampling_ratio': 0.5, 'policy': 'float32', 'residual': False, 'activation': 'sigmoid', 'temb_residual': True, 'max_timesteps': 1000, 'dropout': 0.1, 'beta_1': 0.0001, 'beta_T': 0.02}
+[INFO] New training mode: starting from scratch...
+Model: "model_6"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ image_input (InputLayer)       [(None, None, None,  0           []                               
+                                 2)]                                                              
+                                                                                                  
+ time_input (InputLayer)        [(None,)]            0           []                               
+                                                                                                  
+ model_5 (Functional)           (None, None, None,   12320384    ['image_input[0][0]',            
+                                1)                                'time_input[0][0]']             
+                                                                                                  
+==================================================================================================
+Total params: 12,320,384
+Trainable params: 12,256,384
+Non-trainable params: 64,000
+__________________________________________________________________________________________________
+2025-07-11 16:52:02.128895: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2025-07-11 16:52:02.367384: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2025-07-11 16:52:02.755407: W tensorflow/stream_executor/gpu/asm_compiler.cc:230] Falling back to the CUDA driver for PTX compilation; ptxas does not support CC 8.9
+2025-07-11 16:52:02.755442: W tensorflow/stream_executor/gpu/asm_compiler.cc:233] Used ptxas at ptxas
+2025-07-11 16:52:02.755500: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] UNIMPLEMENTED: ptxas ptxas too old. Falling back to the driver to compile.
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+T=1000
+Diffusion trainer created successfully!!
+Loaded model checkpoint: transform model_epoch000250.h5
+T 1000 infer_T 1000
+final_gen shape: (376, 499)
+all_targets_2d shape: (376, 499)
+0.45281714 0.80489826
+-1.0 0.0859375
+MAE: 1.6757153272628784, SSIM: -0.8640213418115412
+--------- Sample_1 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 208)
+all_targets_2d shape: (242, 208)
+-0.51561564 0.44384292
+-1.0 0.28564453
+MAE: 0.4892945885658264, SSIM: 0.3801060491775548
+--------- Sample_2 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (237, 197)
+all_targets_2d shape: (237, 197)
+-0.5987469 0.3508482
+-1.0 0.32714844
+MAE: 0.44328582286834717, SSIM: 0.3718846265983988
+--------- Sample_3 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (430, 438)
+all_targets_2d shape: (430, 438)
+-0.81303024 0.380678
+-1.0 0.10644531
+MAE: 0.3228149712085724, SSIM: 0.6528936661272435
+--------- Sample_4 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (465, 480)
+all_targets_2d shape: (465, 480)
+-0.9418389 0.38299072
+-1.0 0.021972656
+MAE: 0.14637838304042816, SSIM: 0.7819585965580962
+--------- Sample_5 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (239, 197)
+all_targets_2d shape: (239, 197)
+-0.041515723 0.3743329
+-1.0 0.22802734
+MAE: 0.8910551071166992, SSIM: -0.3303794469601348
+--------- Sample_6 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (471, 471)
+all_targets_2d shape: (471, 471)
+0.00044762623 0.4996115
+-1.0 0.078125
+MAE: 0.9947457909584045, SSIM: -0.4276486000770974
+--------- Sample_7 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (382, 587)
+all_targets_2d shape: (382, 587)
+0.44451264 0.8992822
+-1.0 0.9316406
+MAE: 1.7491812705993652, SSIM: -0.8680596606244738
+--------- Sample_8 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (276, 273)
+all_targets_2d shape: (276, 273)
+0.2930713 0.59744287
+-1.0 0.10839844
+MAE: 1.4253089427947998, SSIM: -0.730509239422428
+--------- Sample_9 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (317, 241)
+all_targets_2d shape: (317, 241)
+-0.74791205 0.370004
+-1.0 0.26708984
+MAE: 0.3690890967845917, SSIM: 0.6676250160106508
+--------- Sample_10 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (434, 441)
+all_targets_2d shape: (434, 441)
+0.44751588 0.7774996
+-1.0 0.0024414062
+MAE: 1.3647832870483398, SSIM: -0.8267007628830763
+--------- Sample_11 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (468, 478)
+all_targets_2d shape: (468, 478)
+0.44866383 0.85480416
+-1.0 0.028808594
+MAE: 1.544978380203247, SSIM: -0.8419883018258983
+--------- Sample_12 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (271, 280)
+all_targets_2d shape: (271, 280)
+-0.19992319 0.3100441
+-1.0 0.28173828
+MAE: 0.9478009939193726, SSIM: -0.20798229057643366
+--------- Sample_13 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (262, 257)
+all_targets_2d shape: (262, 257)
+0.583023 0.8430308
+-1.0 0.98779297
+MAE: 1.5579808950424194, SSIM: -0.7709362459525012
+--------- Sample_14 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 284)
+all_targets_2d shape: (268, 284)
+-0.051213257 0.70335144
+-1.0 0.36621094
+MAE: 1.1668169498443604, SSIM: -0.4465212003683119
+--------- Sample_15 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.31111535 0.66913
+-0.9996095 0.20259905
+MAE: 1.062882423400879, SSIM: -0.7592560301360864
+--------- Sample_16 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (508, 549)
+all_targets_2d shape: (508, 549)
+-0.060525425 0.6821983
+-1.0 0.22705078
+MAE: 1.3381340503692627, SSIM: -0.5886169352432924
+--------- Sample_17 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (251, 250)
+all_targets_2d shape: (251, 250)
+-0.5004342 0.39963725
+-1.0 0.7441406
+MAE: 0.5941309928894043, SSIM: 0.28051683630360247
+--------- Sample_18 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (333, 505)
+all_targets_2d shape: (333, 505)
+0.046815466 0.53831154
+-1.0 -0.10058594
+MAE: 1.2756258249282837, SSIM: -0.5805010143599759
+--------- Sample_19 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (399, 400)
+all_targets_2d shape: (399, 400)
+-0.41861412 0.47517523
+-1.0 0.16064453
+MAE: 0.9151238203048706, SSIM: -0.18709593058153545
+--------- Sample_20 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (507, 590)
+all_targets_2d shape: (507, 590)
+-0.91061515 0.28285205
+-1.0 0.111816406
+MAE: 0.24650201201438904, SSIM: 0.6712914805971
+--------- Sample_21 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (438, 437)
+all_targets_2d shape: (438, 437)
+-0.18676426 0.5007193
+-1.0 0.16015625
+MAE: 1.1060503721237183, SSIM: -0.45710088184505665
+--------- Sample_22 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (321, 423)
+all_targets_2d shape: (321, 423)
+-0.4569956 0.4125811
+-1.0 -0.0014648438
+MAE: 0.8732624053955078, SSIM: -0.020699554115148292
+--------- Sample_23 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (355, 467)
+all_targets_2d shape: (355, 467)
+-0.7407143 0.73353404
+-1.0 0.02734375
+MAE: 0.5380277633666992, SSIM: 0.4808185728426434
+--------- Sample_24 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (262, 256)
+all_targets_2d shape: (262, 256)
+0.2079903 0.69294256
+-1.0 0.36767578
+MAE: 1.3571147918701172, SSIM: -0.6772050871765405
+--------- Sample_25 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (376, 495)
+all_targets_2d shape: (376, 495)
+-0.8622348 0.21634926
+-1.0 -0.061523438
+MAE: 0.2906962037086487, SSIM: 0.5962025713697128
+--------- Sample_26 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (247, 207)
+all_targets_2d shape: (247, 207)
+0.6823434 1.0
+-1.0 0.30273438
+MAE: 1.5874124765396118, SSIM: -0.6111430209925728
+--------- Sample_27 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (444, 441)
+all_targets_2d shape: (444, 441)
+-0.4104293 0.32516783
+-1.0 0.114746094
+MAE: 0.9118375182151794, SSIM: -0.19954121720771023
+--------- Sample_28 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (512, 541)
+all_targets_2d shape: (512, 541)
+-0.8431816 0.23878686
+-1.0 0.02734375
+MAE: 0.39993786811828613, SSIM: 0.5281124234256069
+--------- Sample_29 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (386, 523)
+all_targets_2d shape: (386, 523)
+-0.6252668 0.29063302
+-1.0 0.296875
+MAE: 0.7507409453392029, SSIM: 0.24544058142629546
+--------- Sample_30 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (263, 457)
+all_targets_2d shape: (263, 457)
+-0.6215929 0.40626833
+-1.0 0.083496094
+MAE: 0.6020220518112183, SSIM: 0.2192541482929444
+--------- Sample_31 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (272, 277)
+all_targets_2d shape: (272, 277)
+-0.9215479 0.24997143
+-1.0 0.2915039
+MAE: 0.18046174943447113, SSIM: 0.8638937009254394
+--------- Sample_32 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (421, 421)
+all_targets_2d shape: (421, 421)
+0.35405588 0.71917284
+-1.0 0.03955078
+MAE: 1.3827354907989502, SSIM: -0.6889384023489448
+--------- Sample_33 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (329, 561)
+all_targets_2d shape: (329, 561)
+0.13275729 0.6078487
+-1.0 0.057128906
+MAE: 1.0527619123458862, SSIM: -0.6323873319108572
+--------- Sample_34 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (283, 276)
+all_targets_2d shape: (283, 276)
+-0.08706613 0.5009432
+-1.0 0.4140625
+MAE: 1.0942745208740234, SSIM: -0.4035991795919514
+--------- Sample_35 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (520, 547)
+all_targets_2d shape: (520, 547)
+-0.98763615 0.5671233
+-1.0 0.17089844
+MAE: 0.2529609799385071, SSIM: 0.6511381413913528
+--------- Sample_36 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.70351464 0.20988357
+-0.95875686 0.13785505
+MAE: 0.30836349725723267, SSIM: 0.4900434951276098
+--------- Sample_37 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (269, 224)
+all_targets_2d shape: (269, 224)
+-1.0 0.27492467
+-1.0 0.26416016
+MAE: 0.027562085539102554, SSIM: 0.9026989952617844
+--------- Sample_38 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (333, 458)
+all_targets_2d shape: (333, 458)
+-1.0 0.29123348
+-1.0 0.9453125
+MAE: 0.08795854449272156, SSIM: 0.7333741694159944
+--------- Sample_39 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (489, 489)
+all_targets_2d shape: (489, 489)
+-0.50484765 0.40696082
+-1.0 0.15673828
+MAE: 0.8098442554473877, SSIM: 0.02928079790636403
+--------- Sample_40 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (297, 284)
+all_targets_2d shape: (297, 284)
+-0.08602443 0.4173941
+-1.0 0.21044922
+MAE: 1.0690510272979736, SSIM: -0.4113533363676269
+--------- Sample_41 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (252, 256)
+all_targets_2d shape: (252, 256)
+-0.21653421 0.35481635
+-1.0 0.26708984
+MAE: 0.9263438582420349, SSIM: -0.17312530361117853
+--------- Sample_42 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (246, 245)
+all_targets_2d shape: (246, 245)
+-0.08221869 0.39566404
+-1.0 0.27441406
+MAE: 1.048497200012207, SSIM: -0.36432817256815375
+--------- Sample_43 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (278, 283)
+all_targets_2d shape: (278, 283)
+-0.6766387 0.47083777
+-1.0 0.27294922
+MAE: 0.436370849609375, SSIM: 0.6200280948833841
+--------- Sample_44 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (405, 548)
+all_targets_2d shape: (405, 548)
+-0.41332304 0.3684738
+-1.0 0.001953125
+MAE: 0.920106828212738, SSIM: -0.0512730133929639
+--------- Sample_45 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (375, 535)
+all_targets_2d shape: (375, 535)
+-0.19292395 0.627219
+-1.0 0.018066406
+MAE: 1.2479169368743896, SSIM: -0.5119356485809656
+--------- Sample_46 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (282, 505)
+all_targets_2d shape: (282, 505)
+-0.48817694 0.3783794
+-1.0 0.064453125
+MAE: 0.5993728637695312, SSIM: 0.17072640923062998
+--------- Sample_47 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (285, 279)
+all_targets_2d shape: (285, 279)
+-0.82525826 0.46778336
+-1.0 0.2446289
+MAE: 0.3177487254142761, SSIM: 0.6827220298171996
+--------- Sample_48 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (275, 230)
+all_targets_2d shape: (275, 230)
+-0.7037501 0.64237124
+-1.0 0.24658203
+MAE: 0.3382590115070343, SSIM: 0.6195200691864007
+--------- Sample_49 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (392, 499)
+all_targets_2d shape: (392, 499)
+-0.8010596 0.3888373
+-1.0 0.91552734
+MAE: 0.47625836730003357, SSIM: 0.5757066584316715
+--------- Sample_50 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (261, 249)
+all_targets_2d shape: (261, 249)
+0.30748206 0.60297215
+-1.0 0.28808594
+MAE: 1.3393746614456177, SSIM: -0.7111504292245324
+--------- Sample_51 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (430, 552)
+all_targets_2d shape: (430, 552)
+0.40238434 0.9487739
+-1.0 -0.026855469
+MAE: 1.5375162363052368, SSIM: -0.8038198759433872
+--------- Sample_52 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (236, 191)
+all_targets_2d shape: (236, 191)
+0.34415227 0.7258399
+-1.0 0.4951172
+MAE: 1.2472820281982422, SSIM: -0.6496750449364991
+--------- Sample_53 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (345, 438)
+all_targets_2d shape: (345, 438)
+-0.19998917 0.3674736
+-1.0 0.017578125
+MAE: 0.9135504364967346, SSIM: -0.3367395107029718
+--------- Sample_54 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 243)
+all_targets_2d shape: (242, 243)
+-0.40098125 0.45801046
+-1.0 0.98779297
+MAE: 0.7392367124557495, SSIM: 0.06512937592652741
+--------- Sample_55 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (348, 467)
+all_targets_2d shape: (348, 467)
+-0.32167932 0.33410117
+-1.0 0.030761719
+MAE: 0.8659796118736267, SSIM: -0.13884794589766525
+--------- Sample_56 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (392, 568)
+all_targets_2d shape: (392, 568)
+-0.8190818 0.4848968
+-1.0 0.018554688
+MAE: 0.2943955361843109, SSIM: 0.7069400732419892
+--------- Sample_57 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.5285479 0.84675026
+-1.0 -0.15943205
+MAE: 0.6124498844146729, SSIM: 0.013640564483661743
+--------- Sample_58 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (284, 243)
+all_targets_2d shape: (284, 243)
+-0.92851335 0.41792244
+-1.0 0.24414062
+MAE: 0.13791275024414062, SSIM: 0.7841403101229854
+--------- Sample_59 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (368, 474)
+all_targets_2d shape: (368, 474)
+-0.26172647 0.47395438
+-1.0 0.25683594
+MAE: 1.167388916015625, SSIM: -0.37853156654289566
+--------- Sample_60 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (250, 245)
+all_targets_2d shape: (250, 245)
+0.2018433 0.6267892
+-1.0 0.3623047
+MAE: 1.2344865798950195, SSIM: -0.6030409052198239
+--------- Sample_61 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (373, 567)
+all_targets_2d shape: (373, 567)
+0.2915217 0.704552
+-1.0 0.09326172
+MAE: 1.2495965957641602, SSIM: -0.7776461908289996
+--------- Sample_62 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (305, 296)
+all_targets_2d shape: (305, 296)
+-0.36594114 0.5376362
+-1.0 0.6796875
+MAE: 0.9496374726295471, SSIM: -0.1069107715814681
+--------- Sample_63 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.8215177 1.0
+-1.0 0.5567553
+MAE: 1.5781453847885132, SSIM: -0.6436397115147273
+--------- Sample_64 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (459, 458)
+all_targets_2d shape: (459, 458)
+-0.42326346 0.56674707
+-1.0 0.055664062
+MAE: 0.9243369698524475, SSIM: -0.05030018349676854
+--------- Sample_65 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (360, 492)
+all_targets_2d shape: (360, 492)
+-0.3308403 0.3182475
+-1.0 -0.015136719
+MAE: 0.8168104887008667, SSIM: -0.05198437832074697
+--------- Sample_66 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (532, 556)
+all_targets_2d shape: (532, 556)
+-0.59847885 0.52852905
+-1.0 0.03173828
+MAE: 0.719772219657898, SSIM: 0.24225370396855522
+--------- Sample_67 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (273, 423)
+all_targets_2d shape: (273, 423)
+-0.22711389 0.44869715
+-1.0 0.35205078
+MAE: 0.8036192655563354, SSIM: -0.24798029551607936
+--------- Sample_68 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (325, 446)
+all_targets_2d shape: (325, 446)
+0.3086002 0.7974726
+-1.0 -0.018554688
+MAE: 1.2371716499328613, SSIM: -0.6793231700410715
+--------- Sample_69 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (271, 278)
+all_targets_2d shape: (271, 278)
+0.039589413 0.66543156
+-1.0 0.23779297
+MAE: 1.3240662813186646, SSIM: -0.639472411718225
+--------- Sample_70 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (236, 213)
+all_targets_2d shape: (236, 213)
+-1.0 0.3300636
+-1.0 0.234375
+MAE: 0.07970741391181946, SSIM: 0.7401024207842981
+--------- Sample_71 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (508, 580)
+all_targets_2d shape: (508, 580)
+-0.40522942 0.3417295
+-1.0 0.06542969
+MAE: 0.9728178977966309, SSIM: -0.13539107222808433
+--------- Sample_72 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (246, 201)
+all_targets_2d shape: (246, 201)
+0.6932348 0.96887964
+-1.0 0.2446289
+MAE: 1.5567752122879028, SSIM: -0.6392091340715617
+--------- Sample_73 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 223)
+all_targets_2d shape: (270, 223)
+0.07684926 0.47221017
+-1.0 0.22753906
+MAE: 1.0703204870224, SSIM: -0.45466496048026855
+--------- Sample_74 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (281, 440)
+all_targets_2d shape: (281, 440)
+-0.2701925 0.35584646
+-1.0 0.053222656
+MAE: 0.8426276445388794, SSIM: -0.24953880498715786
+--------- Sample_75 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (465, 460)
+all_targets_2d shape: (465, 460)
+-0.8528989 0.2623692
+-1.0 -0.076660156
+MAE: 0.2509910464286804, SSIM: 0.678032970425639
+--------- Sample_76 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (250, 210)
+all_targets_2d shape: (250, 210)
+0.18473838 0.57132286
+-1.0 0.25585938
+MAE: 1.149125576019287, SSIM: -0.5763975436829656
+--------- Sample_77 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.347381 0.74141407
+-1.0 0.98779297
+MAE: 1.145727276802063, SSIM: -0.749422304083075
+--------- Sample_78 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (506, 549)
+all_targets_2d shape: (506, 549)
+0.29948145 0.75550914
+-1.0 0.16894531
+MAE: 1.4675160646438599, SSIM: -0.7411721840690348
+--------- Sample_79 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (235, 202)
+all_targets_2d shape: (235, 202)
+-0.97970325 0.30617917
+-1.0 0.953125
+MAE: 0.09215349704027176, SSIM: 0.7910881856690505
+--------- Sample_80 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (489, 538)
+all_targets_2d shape: (489, 538)
+-0.6458818 0.49351233
+-1.0 0.13574219
+MAE: 0.6381799578666687, SSIM: 0.28940160213082905
+--------- Sample_81 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (243, 207)
+all_targets_2d shape: (243, 207)
+-1.0 0.32545286
+-1.0 0.29492188
+MAE: 0.05566232651472092, SSIM: 0.8137274274824999
+--------- Sample_82 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (225, 216)
+all_targets_2d shape: (225, 216)
+-0.26081085 0.41246778
+-1.0 0.33984375
+MAE: 0.8786455392837524, SSIM: -0.1634018516007189
+--------- Sample_83 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (450, 461)
+all_targets_2d shape: (450, 461)
+-0.14728555 0.63602537
+-1.0 0.3696289
+MAE: 1.1851887702941895, SSIM: -0.48245185577610206
+--------- Sample_84 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (282, 573)
+all_targets_2d shape: (282, 573)
+-0.50792694 0.45879993
+-1.0 0.032714844
+MAE: 0.6430294513702393, SSIM: 0.2018491914049031
+--------- Sample_85 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (348, 523)
+all_targets_2d shape: (348, 523)
+-0.3411093 0.38322607
+-1.0 0.076171875
+MAE: 0.774649441242218, SSIM: 0.06275673170456471
+--------- Sample_86 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (288, 433)
+all_targets_2d shape: (288, 433)
+0.2649621 0.7614385
+-1.0 -0.017089844
+MAE: 1.2367209196090698, SSIM: -0.7031752959391236
+--------- Sample_87 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (546, 591)
+all_targets_2d shape: (546, 591)
+0.040220775 0.7657624
+-1.0 0.39013672
+MAE: 1.3704661130905151, SSIM: -0.652407764311331
+--------- Sample_88 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 444)
+all_targets_2d shape: (447, 444)
+-0.47920534 0.79577416
+-1.0 0.38476562
+MAE: 0.7789485454559326, SSIM: 0.07561624412757754
+--------- Sample_89 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (520, 587)
+all_targets_2d shape: (520, 587)
+-0.23702203 0.5796056
+-1.0 0.2211914
+MAE: 1.1946288347244263, SSIM: -0.43908173744827167
+--------- Sample_90 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 217)
+all_targets_2d shape: (270, 217)
+0.5615156 0.895253
+-1.0 0.27001953
+MAE: 1.5466248989105225, SSIM: -0.7418052263131284
+--------- Sample_91 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (339, 514)
+all_targets_2d shape: (339, 514)
+0.15869516 0.63777655
+-1.0 -0.06738281
+MAE: 1.2300256490707397, SSIM: -0.6791890687292379
+--------- Sample_92 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (253, 224)
+all_targets_2d shape: (253, 224)
+-0.13980804 0.32532743
+-1.0 0.234375
+MAE: 0.8414891362190247, SSIM: -0.16493772953990796
+--------- Sample_93 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.60068274 0.94292974
+-1.0 0.11857259
+MAE: 1.456374168395996, SSIM: -0.7451530479149089
+--------- Sample_94 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (507, 549)
+all_targets_2d shape: (507, 549)
+-0.92845345 0.23841631
+-1.0 0.055664062
+MAE: 0.21095304191112518, SSIM: 0.6904561200944223
+--------- Sample_95 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (258, 231)
+all_targets_2d shape: (258, 231)
+0.2501149 0.632143
+-1.0 0.24121094
+MAE: 1.226630449295044, SSIM: -0.6273549617580588
+--------- Sample_96 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.9602767 0.17506069
+-1.0 0.06408131
+MAE: 0.1517748087644577, SSIM: 0.7414541032713687
+--------- Sample_97 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 213)
+all_targets_2d shape: (270, 213)
+0.07608936 0.5470883
+-1.0 0.29882812
+MAE: 1.1168076992034912, SSIM: -0.5138731357211178
+--------- Sample_98 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (274, 281)
+all_targets_2d shape: (274, 281)
+-0.9453429 0.25734597
+-1.0 0.1459961
+MAE: 0.14750461280345917, SSIM: 0.7859208632766
+--------- Sample_99 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (300, 450)
+all_targets_2d shape: (300, 450)
+-0.9790323 0.35913357
+-1.0 0.04638672
+MAE: 0.12058104574680328, SSIM: 0.7121080620218703
+--------- Sample_100 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (275, 427)
+all_targets_2d shape: (275, 427)
+0.1710177 0.67381644
+-1.0 0.10205078
+MAE: 1.1333805322647095, SSIM: -0.6226861139523917
+--------- Sample_101 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.3550751 0.45579335
+-1.0 0.4046588
+MAE: 0.500883162021637, SSIM: 0.0651506206048117
+--------- Sample_102 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.17085248 0.565809
+-1.0 -0.07020575
+MAE: 0.9648197889328003, SSIM: -0.5736370484384453
+--------- Sample_103 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (336, 481)
+all_targets_2d shape: (336, 481)
+0.26365295 0.70463634
+-1.0 0.060546875
+MAE: 1.3183777332305908, SSIM: -0.7989365695399594
+--------- Sample_104 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (553, 547)
+all_targets_2d shape: (553, 547)
+-0.7206303 0.44379076
+-1.0 0.18066406
+MAE: 0.5003293752670288, SSIM: 0.5007940455720796
+--------- Sample_105 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (224, 193)
+all_targets_2d shape: (224, 193)
+-1.0 0.2517247
+-1.0 0.34033203
+MAE: 0.06929033249616623, SSIM: 0.7609634831564845
+--------- Sample_106 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (252, 415)
+all_targets_2d shape: (252, 415)
+0.48589137 0.8748437
+-1.0 0.18164062
+MAE: 1.3686424493789673, SSIM: -0.7602907121410943
+--------- Sample_107 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (327, 475)
+all_targets_2d shape: (327, 475)
+0.5760314 0.96633214
+-1.0 0.041015625
+MAE: 1.5023099184036255, SSIM: -0.7634367283515235
+--------- Sample_108 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 221)
+all_targets_2d shape: (268, 221)
+-1.0 0.2131003
+-1.0 0.21679688
+MAE: 0.02513798512518406, SSIM: 0.8998775826229423
+--------- Sample_109 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.9494075 0.21863316
+-1.0 0.47320247
+MAE: 0.20586766302585602, SSIM: 0.6476207333386546
+--------- Sample_110 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 428)
+all_targets_2d shape: (268, 428)
+-0.898992 0.25165156
+-1.0 0.044433594
+MAE: 0.17257510125637054, SSIM: 0.6593367311114022
+--------- Sample_111 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (480, 488)
+all_targets_2d shape: (480, 488)
+0.3730105 0.8324046
+-1.0 0.14892578
+MAE: 1.5652321577072144, SSIM: -0.8055268598282682
+--------- Sample_112 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (315, 445)
+all_targets_2d shape: (315, 445)
+-0.5851902 0.34427226
+-1.0 0.022949219
+MAE: 0.5437036752700806, SSIM: 0.23318854263908953
+--------- Sample_113 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (249, 203)
+all_targets_2d shape: (249, 203)
+0.57825893 0.86062044
+-1.0 0.32958984
+MAE: 1.4162324666976929, SSIM: -0.6267676407686649
+--------- Sample_114 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (445, 446)
+all_targets_2d shape: (445, 446)
+-0.56129956 0.88023233
+-1.0 0.17578125
+MAE: 0.767414927482605, SSIM: 0.10774712843345786
+--------- Sample_115 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (283, 280)
+all_targets_2d shape: (283, 280)
+-0.33196 0.36892885
+-1.0 0.15966797
+MAE: 0.9077936410903931, SSIM: -0.033556057029584044
+--------- Sample_116 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (271, 277)
+all_targets_2d shape: (271, 277)
+-0.015781783 0.4722695
+-1.0 0.2529297
+MAE: 1.1256873607635498, SSIM: -0.45054729909822067
+--------- Sample_117 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 277)
+all_targets_2d shape: (268, 277)
+-0.9265915 0.5650921
+-1.0 0.2998047
+MAE: 0.13052617013454437, SSIM: 0.8688674472701761
+--------- Sample_118 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (285, 286)
+all_targets_2d shape: (285, 286)
+0.338963 0.74367857
+-1.0 0.23632812
+MAE: 1.4958455562591553, SSIM: -0.7270795229259477
+--------- Sample_119 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 449)
+all_targets_2d shape: (447, 449)
+-0.7700906 0.5299026
+-1.0 0.12402344
+MAE: 0.3169749081134796, SSIM: 0.6273604671158803
+--------- Sample_120 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (438, 446)
+all_targets_2d shape: (438, 446)
+0.054792188 0.7747836
+-1.0 0.21142578
+MAE: 1.2573275566101074, SSIM: -0.6777109690369718
+--------- Sample_121 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (227, 206)
+all_targets_2d shape: (227, 206)
+-0.95859534 0.31889477
+-1.0 0.32421875
+MAE: 0.10516081005334854, SSIM: 0.8036704129526168
+--------- Sample_122 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (352, 469)
+all_targets_2d shape: (352, 469)
+-0.38776243 0.34792137
+-1.0 -0.06347656
+MAE: 0.6788122057914734, SSIM: -0.0018480494226099714
+--------- Sample_123 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (496, 544)
+all_targets_2d shape: (496, 544)
+-0.39375994 0.46277785
+-1.0 0.43701172
+MAE: 1.056726336479187, SSIM: -0.2425539090960979
+--------- Sample_124 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (406, 555)
+all_targets_2d shape: (406, 555)
+-0.78266895 0.25184023
+-1.0 0.026367188
+MAE: 0.4838219881057739, SSIM: 0.5044417553710451
+--------- Sample_125 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (463, 467)
+all_targets_2d shape: (463, 467)
+0.10596592 0.74170697
+-1.0 0.04736328
+MAE: 1.3344002962112427, SSIM: -0.6902760576089245
+--------- Sample_126 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (399, 413)
+all_targets_2d shape: (399, 413)
+-0.5718398 0.9963986
+-1.0 0.38476562
+MAE: 0.5657511353492737, SSIM: 0.2368762867000943
+--------- Sample_127 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (364, 541)
+all_targets_2d shape: (364, 541)
+-0.8727249 0.4277098
+-1.0 0.23046875
+MAE: 0.39926329255104065, SSIM: 0.6039730841939825
+--------- Sample_128 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (455, 449)
+all_targets_2d shape: (455, 449)
+-0.5228959 0.46134385
+-1.0 0.18457031
+MAE: 0.7451441884040833, SSIM: 0.173046045989117
+--------- Sample_129 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (366, 473)
+all_targets_2d shape: (366, 473)
+-0.93612736 0.2981048
+-1.0 -0.0087890625
+MAE: 0.1503187119960785, SSIM: 0.7714479761941078
+--------- Sample_130 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 173)
+all_targets_2d shape: (242, 173)
+-0.43619335 0.44955653
+-1.0 0.2241211
+MAE: 0.5757889747619629, SSIM: 0.09326960240063842
+--------- Sample_131 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (325, 481)
+all_targets_2d shape: (325, 481)
+-0.44526824 0.29331446
+-1.0 0.953125
+MAE: 0.6434457302093506, SSIM: 0.15204279739405258
+--------- Sample_132 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (317, 244)
+all_targets_2d shape: (317, 244)
+0.44276026 0.7916766
+-1.0 0.29833984
+MAE: 1.5988398790359497, SSIM: -0.7722911053624809
+--------- Sample_133 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (295, 281)
+all_targets_2d shape: (295, 281)
+-1.0 0.3422958
+-1.0 1.0
+MAE: 0.07406484335660934, SSIM: 0.8053460845832248
+--------- Sample_134 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (316, 565)
+all_targets_2d shape: (316, 565)
+-0.10292398 0.43731484
+-1.0 0.084472656
+MAE: 0.9833515286445618, SSIM: -0.39913548319728376
+--------- Sample_135 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (460, 452)
+all_targets_2d shape: (460, 452)
+-0.79512143 0.27795833
+-1.0 1.0
+MAE: 0.3512635827064514, SSIM: 0.6331431237201354
+--------- Sample_136 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (463, 464)
+all_targets_2d shape: (463, 464)
+-0.3843601 0.33776098
+-1.0 0.043945312
+MAE: 0.8629655241966248, SSIM: -0.1169715981164462
+--------- Sample_137 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.05603698 0.5153128
+-1.0 0.24020827
+MAE: 0.8172968029975891, SSIM: -0.6079356554525488
+--------- Sample_138 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 208)
+all_targets_2d shape: (242, 208)
+-0.2704199 0.42557982
+-1.0 0.3125
+MAE: 0.7287753820419312, SSIM: -0.05660916094419067
+--------- Sample_139 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (448, 446)
+all_targets_2d shape: (448, 446)
+-0.3544045 0.33047804
+-1.0 0.12841797
+MAE: 0.8980858325958252, SSIM: -0.1950150246601125
+--------- Sample_140 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (279, 277)
+all_targets_2d shape: (279, 277)
+-1.0 0.2801679
+-1.0 0.9873047
+MAE: 0.035750433802604675, SSIM: 0.8560204128611868
+--------- Sample_141 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (280, 279)
+all_targets_2d shape: (280, 279)
+0.20047557 0.623646
+-1.0 0.30029297
+MAE: 1.3391504287719727, SSIM: -0.6659944705510092
+--------- Sample_142 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (455, 447)
+all_targets_2d shape: (455, 447)
+-0.5044968 0.3141795
+-1.0 0.7426758
+MAE: 0.7464436292648315, SSIM: 0.08912901650933477
+--------- Sample_143 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (440, 443)
+all_targets_2d shape: (440, 443)
+-0.90833944 0.254805
+-1.0 0.09863281
+MAE: 0.1818384826183319, SSIM: 0.7080015675693787
+--------- Sample_144 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (249, 249)
+all_targets_2d shape: (249, 249)
+0.6625854 0.948115
+-1.0 0.36279297
+MAE: 1.6848938465118408, SSIM: -0.7670711096915809
+--------- Sample_145 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (314, 541)
+all_targets_2d shape: (314, 541)
+-0.24228698 0.55220556
+-1.0 0.2211914
+MAE: 1.1905497312545776, SSIM: -0.4264086917286397
+--------- Sample_146 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (264, 224)
+all_targets_2d shape: (264, 224)
+-0.59657115 0.37654546
+-1.0 0.24804688
+MAE: 0.47628340125083923, SSIM: 0.47934636478353054
+--------- Sample_147 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 217)
+all_targets_2d shape: (242, 217)
+-0.740878 0.3718724
+-1.0 0.28173828
+MAE: 0.3250041902065277, SSIM: 0.5943873709599709
+--------- Sample_148 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (318, 241)
+all_targets_2d shape: (318, 241)
+-0.30063725 0.28989974
+-1.0 0.29345703
+MAE: 0.9234854578971863, SSIM: -0.05649068330091566
+--------- Sample_149 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (321, 246)
+all_targets_2d shape: (321, 246)
+-0.91850364 0.16735625
+-1.0 -0.00048828125
+MAE: 0.18656359612941742, SSIM: 0.7973263739002797
+--------- Sample_150 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (394, 524)
+all_targets_2d shape: (394, 524)
+-0.97532964 0.23446733
+-1.0 -0.03173828
+MAE: 0.10981559008359909, SSIM: 0.8039288593076958
+--------- Sample_151 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (355, 519)
+all_targets_2d shape: (355, 519)
+0.22126724 0.64655733
+-1.0 0.33398438
+MAE: 1.436631202697754, SSIM: -0.7439523697282343
+--------- Sample_152 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (271, 243)
+all_targets_2d shape: (271, 243)
+0.36552846 0.88464236
+-1.0 0.953125
+MAE: 1.4278192520141602, SSIM: -0.735065156703464
+--------- Sample_153 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (309, 449)
+all_targets_2d shape: (309, 449)
+0.20058027 0.61709327
+-1.0 0.053222656
+MAE: 1.1331158876419067, SSIM: -0.6765046097702525
+--------- Sample_154 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (230, 210)
+all_targets_2d shape: (230, 210)
+0.43509305 0.8221664
+-1.0 0.36523438
+MAE: 1.3577814102172852, SSIM: -0.6355561872480581
+--------- Sample_155 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (244, 231)
+all_targets_2d shape: (244, 231)
+-0.61460245 0.6869983
+-1.0 0.2109375
+MAE: 0.43679991364479065, SSIM: 0.4951699418529869
+--------- Sample_156 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (471, 485)
+all_targets_2d shape: (471, 485)
+-0.77630466 0.39457235
+-1.0 -0.11035156
+MAE: 0.5376273393630981, SSIM: 0.5315003915415936
+--------- Sample_157 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (278, 272)
+all_targets_2d shape: (278, 272)
+0.5671065 0.90953654
+-1.0 0.28027344
+MAE: 1.6960848569869995, SSIM: -0.8140961077950727
+--------- Sample_158 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (252, 209)
+all_targets_2d shape: (252, 209)
+-0.6116744 0.39311653
+-1.0 0.25732422
+MAE: 0.4168795347213745, SSIM: 0.5100819755672921
+--------- Sample_159 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (390, 597)
+all_targets_2d shape: (390, 597)
+0.31211045 0.80004966
+-1.0 0.18701172
+MAE: 1.5780984163284302, SSIM: -0.8248734482676144
+--------- Sample_160 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (245, 222)
+all_targets_2d shape: (245, 222)
+0.0071046273 0.40107548
+-1.0 0.28515625
+MAE: 0.9325147271156311, SSIM: -0.3381603578311325
+--------- Sample_161 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (266, 410)
+all_targets_2d shape: (266, 410)
+0.019271169 0.4817619
+-1.0 0.2705078
+MAE: 0.9624894857406616, SSIM: -0.5549123336614246
+--------- Sample_162 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (289, 418)
+all_targets_2d shape: (289, 418)
+0.550044 0.9726789
+-1.0 0.07128906
+MAE: 1.4741930961608887, SSIM: -0.7372460713702088
+--------- Sample_163 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (246, 212)
+all_targets_2d shape: (246, 212)
+-0.36322048 0.43016103
+-1.0 0.29882812
+MAE: 0.6275969743728638, SSIM: 0.13707348498692354
+--------- Sample_164 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 205)
+all_targets_2d shape: (242, 205)
+-1.0 0.14880574
+-1.0 0.2685547
+MAE: 0.05145355314016342, SSIM: 0.8239222772553548
+--------- Sample_165 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (486, 490)
+all_targets_2d shape: (486, 490)
+-0.8369803 0.33873233
+-1.0 0.12890625
+MAE: 0.3385072946548462, SSIM: 0.5738373513771088
+--------- Sample_166 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (401, 548)
+all_targets_2d shape: (401, 548)
+-0.36320582 0.35790923
+-1.0 -0.0625
+MAE: 0.9904991984367371, SSIM: -0.16588232043493562
+--------- Sample_167 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.96040434 0.36343497
+-1.0 0.35922134
+MAE: 0.15758226811885834, SSIM: 0.6616108336065315
+--------- Sample_168 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (328, 547)
+all_targets_2d shape: (328, 547)
+0.003114454 0.5203619
+-1.0 0.24902344
+MAE: 1.0184130668640137, SSIM: -0.5337479645175661
+--------- Sample_169 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (383, 545)
+all_targets_2d shape: (383, 545)
+-0.38164935 0.6304272
+-1.0 0.16601562
+MAE: 0.9906743764877319, SSIM: -0.08147048565884751
+--------- Sample_170 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (263, 228)
+all_targets_2d shape: (263, 228)
+-0.9231161 0.40492854
+-1.0 0.25048828
+MAE: 0.12892340123653412, SSIM: 0.8290664709308533
+--------- Sample_171 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (226, 202)
+all_targets_2d shape: (226, 202)
+0.4352265 0.77997184
+-1.0 0.24902344
+MAE: 1.3356372117996216, SSIM: -0.6479130883973778
+--------- Sample_172 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.41827443 0.7848312
+-1.0 0.38715482
+MAE: 1.1444323062896729, SSIM: -0.7207193187314537
+--------- Sample_173 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (448, 448)
+all_targets_2d shape: (448, 448)
+-0.039267167 0.7657343
+-1.0 0.118652344
+MAE: 1.168578028678894, SSIM: -0.676075083793919
+--------- Sample_174 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (352, 567)
+all_targets_2d shape: (352, 567)
+-0.35945782 0.2909956
+-1.0 0.953125
+MAE: 0.7765899300575256, SSIM: -0.10988608363454502
+--------- Sample_175 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (443, 477)
+all_targets_2d shape: (443, 477)
+0.13522084 0.60822076
+-1.0 -0.0009765625
+MAE: 1.193968653678894, SSIM: -0.693303474654123
+--------- Sample_176 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (518, 587)
+all_targets_2d shape: (518, 587)
+0.28137523 0.79143274
+-1.0 0.21972656
+MAE: 1.4381957054138184, SSIM: -0.727466679181709
+--------- Sample_177 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (439, 448)
+all_targets_2d shape: (439, 448)
+-0.8931817 0.3344561
+-1.0 0.14111328
+MAE: 0.19555385410785675, SSIM: 0.7057871039532032
+--------- Sample_178 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (347, 253)
+all_targets_2d shape: (347, 253)
+0.5987468 0.9444398
+-1.0 0.14746094
+MAE: 1.7656834125518799, SSIM: -0.8367107467103383
+--------- Sample_179 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (441, 458)
+all_targets_2d shape: (441, 458)
+-0.6083406 0.34472495
+-1.0 -0.03515625
+MAE: 0.639491856098175, SSIM: 0.29748827805979383
+--------- Sample_180 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (527, 592)
+all_targets_2d shape: (527, 592)
+-0.27791834 0.94065976
+-1.0 0.31982422
+MAE: 1.18316650390625, SSIM: -0.4284909091005012
+--------- Sample_181 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (280, 273)
+all_targets_2d shape: (280, 273)
+-0.35021237 0.5177059
+-1.0 0.23925781
+MAE: 0.8265528678894043, SSIM: 0.026449323266241276
+--------- Sample_182 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (237, 209)
+all_targets_2d shape: (237, 209)
+-1.0 0.26946253
+-1.0 0.3388672
+MAE: 0.048321519047021866, SSIM: 0.8192668035454003
+--------- Sample_183 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (407, 420)
+all_targets_2d shape: (407, 420)
+-0.07795417 0.45577988
+-1.0 0.020507812
+MAE: 1.0910800695419312, SSIM: -0.497118776382262
+--------- Sample_184 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (265, 391)
+all_targets_2d shape: (265, 391)
+-1.0 0.5604096
+-1.0 0.123046875
+MAE: 0.08963834494352341, SSIM: 0.7130247915308416
+--------- Sample_185 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (286, 287)
+all_targets_2d shape: (286, 287)
+0.33237427 0.7504113
+-1.0 0.68066406
+MAE: 1.4622207880020142, SSIM: -0.7223838697262914
+--------- Sample_186 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 492)
+all_targets_2d shape: (447, 492)
+-0.13862683 0.4757443
+-1.0 0.09472656
+MAE: 0.9904187917709351, SSIM: -0.4698362898202648
+--------- Sample_187 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (324, 466)
+all_targets_2d shape: (324, 466)
+-0.37583172 0.44562337
+-1.0 0.021972656
+MAE: 0.8709059357643127, SSIM: -0.32768036643047893
+--------- Sample_188 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-1.0 -0.07456697
+-1.0 0.98779297
+MAE: 0.09318406134843826, SSIM: 0.7290640081907911
+--------- Sample_189 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.27941522 0.4613554
+-1.0 0.018173575
+MAE: 0.9017086625099182, SSIM: -0.4598056913143178
+--------- Sample_190 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (371, 529)
+all_targets_2d shape: (371, 529)
+-0.42664862 0.32484075
+-1.0 0.028808594
+MAE: 0.7620032429695129, SSIM: -0.027682126437698178
+--------- Sample_191 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (288, 465)
+all_targets_2d shape: (288, 465)
+-1.0 0.104424395
+-1.0 0.037597656
+MAE: 0.06200442835688591, SSIM: 0.8175839502334852
+--------- Sample_192 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (439, 447)
+all_targets_2d shape: (439, 447)
+-0.461334 0.39326367
+-1.0 0.18652344
+MAE: 0.7985861897468567, SSIM: 0.0561138794787397
+--------- Sample_193 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (273, 456)
+all_targets_2d shape: (273, 456)
+-0.32674482 0.2902947
+-1.0 0.122558594
+MAE: 0.7326762676239014, SSIM: -0.015545123739229526
+--------- Sample_194 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (321, 242)
+all_targets_2d shape: (321, 242)
+-0.49060357 0.37301666
+-1.0 0.9873047
+MAE: 0.5839458703994751, SSIM: 0.3610659664306506
+--------- Sample_195 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (505, 579)
+all_targets_2d shape: (505, 579)
+-0.7606203 0.30205134
+-1.0 0.07714844
+MAE: 0.5071653723716736, SSIM: 0.5116760859917772
+--------- Sample_196 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.44034103 0.54116386
+-1.0 0.01608634
+MAE: 0.5174869298934937, SSIM: 0.051713253757068776
+--------- Sample_197 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (304, 288)
+all_targets_2d shape: (304, 288)
+-0.5315453 0.38040704
+-1.0 0.98779297
+MAE: 0.5587666630744934, SSIM: 0.4646799194048227
+--------- Sample_198 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (317, 251)
+all_targets_2d shape: (317, 251)
+-0.4729966 0.40963295
+-1.0 -0.04736328
+MAE: 0.6444599032402039, SSIM: 0.3506013834091892
+--------- Sample_199 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 279)
+all_targets_2d shape: (270, 279)
+-0.8596431 0.87419033
+-1.0 0.3100586
+MAE: 0.2695671617984772, SSIM: 0.7050950964686616
+--------- Sample_200 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.83345217 1.0
+-1.0 0.38785815
+MAE: 1.5066664218902588, SSIM: -0.6821175519590975
+--------- Sample_201 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (524, 545)
+all_targets_2d shape: (524, 545)
+-0.1331729 0.69718796
+-1.0 0.22460938
+MAE: 1.2032413482666016, SSIM: -0.47735418306891675
+--------- Sample_202 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (273, 262)
+all_targets_2d shape: (273, 262)
+0.38633868 0.69323355
+-1.0 0.6743164
+MAE: 1.4299273490905762, SSIM: -0.7575242968054207
+--------- Sample_203 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (527, 587)
+all_targets_2d shape: (527, 587)
+-0.681611 0.6425703
+-1.0 0.23095703
+MAE: 0.6761577129364014, SSIM: 0.27379527074330035
+--------- Sample_204 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (273, 219)
+all_targets_2d shape: (273, 219)
+-1.0 0.31403238
+-1.0 0.25195312
+MAE: 0.035365812480449677, SSIM: 0.8784101790046879
+--------- Sample_205 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.6228061 0.22562753
+-1.0 0.48255146
+MAE: 0.38623979687690735, SSIM: 0.3126713225496004
+--------- Sample_206 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (390, 533)
+all_targets_2d shape: (390, 533)
+-0.58651906 0.9971631
+-1.0 0.6767578
+MAE: 0.8060282468795776, SSIM: 0.16848643444057734
+--------- Sample_207 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 344)
+all_targets_2d shape: (320, 344)
+-0.6704828 0.22978102
+-1.0 0.03173828
+MAE: 0.4419175386428833, SSIM: 0.648975291881553
+--------- Sample_208 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (356, 509)
+all_targets_2d shape: (356, 509)
+-0.84109056 0.28731042
+-1.0 -0.063964844
+MAE: 0.3536369204521179, SSIM: 0.6202630166080083
+--------- Sample_209 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 278)
+all_targets_2d shape: (268, 278)
+-0.26206836 0.27393386
+-1.0 0.21582031
+MAE: 0.8760855793952942, SSIM: -0.07566958107592586
+--------- Sample_210 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (512, 535)
+all_targets_2d shape: (512, 535)
+-0.7204602 0.52630734
+-1.0 -0.15673828
+MAE: 0.6709691286087036, SSIM: 0.36225643023359433
+--------- Sample_211 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 449)
+all_targets_2d shape: (447, 449)
+-0.39735618 0.34118232
+-1.0 0.12402344
+MAE: 0.9222031235694885, SSIM: -0.22672219692803403
+--------- Sample_212 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (438, 489)
+all_targets_2d shape: (438, 489)
+-1.0 0.33964172
+-1.0 0.1328125
+MAE: 0.07226283848285675, SSIM: 0.7694916480634448
+--------- Sample_213 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (473, 465)
+all_targets_2d shape: (473, 465)
+-0.47200966 0.3986608
+-1.0 0.7885742
+MAE: 0.7007509469985962, SSIM: 0.2101688062241493
+--------- Sample_214 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.42475712 0.29860905
+-1.0 0.98779297
+MAE: 0.52498459815979, SSIM: 0.0460404088452952
+--------- Sample_215 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (497, 493)
+all_targets_2d shape: (497, 493)
+-0.13201696 0.5168086
+-1.0 0.25390625
+MAE: 1.174964427947998, SSIM: -0.4951210389880172
+--------- Sample_216 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (479, 499)
+all_targets_2d shape: (479, 499)
+-0.253465 0.63603354
+-1.0 -0.020019531
+MAE: 1.2253897190093994, SSIM: -0.5478010348811292
+--------- Sample_217 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (242, 215)
+all_targets_2d shape: (242, 215)
+0.5587658 0.8896311
+-1.0 0.76416016
+MAE: 1.396827220916748, SSIM: -0.6736763046304828
+--------- Sample_218 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (458, 458)
+all_targets_2d shape: (458, 458)
+-0.4041618 0.43055406
+-1.0 0.08984375
+MAE: 0.9360179305076599, SSIM: -0.13376947421111202
+--------- Sample_219 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (302, 303)
+all_targets_2d shape: (302, 303)
+-0.41543493 0.27291825
+-1.0 0.16894531
+MAE: 0.8209153413772583, SSIM: 0.07256419011671511
+--------- Sample_220 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (288, 456)
+all_targets_2d shape: (288, 456)
+-0.20698975 0.4121256
+-1.0 -0.03125
+MAE: 0.8860771656036377, SSIM: -0.3185252666075916
+--------- Sample_221 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (230, 205)
+all_targets_2d shape: (230, 205)
+-1.0 0.31626517
+-1.0 0.33496094
+MAE: 0.06753303855657578, SSIM: 0.7754732181681916
+--------- Sample_222 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (245, 218)
+all_targets_2d shape: (245, 218)
+-0.7621977 0.48443002
+-1.0 0.27441406
+MAE: 0.3027080297470093, SSIM: 0.606907405857662
+--------- Sample_223 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (235, 202)
+all_targets_2d shape: (235, 202)
+-1.0 0.32105592
+-1.0 0.22705078
+MAE: 0.09272198379039764, SSIM: 0.7643447861631699
+--------- Sample_224 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (501, 550)
+all_targets_2d shape: (501, 550)
+-0.5200293 0.7186693
+-1.0 0.23095703
+MAE: 0.8748221397399902, SSIM: 0.019339488973814697
+--------- Sample_225 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (491, 546)
+all_targets_2d shape: (491, 546)
+-0.8973064 0.40307048
+-1.0 0.13085938
+MAE: 0.5240757465362549, SSIM: 0.5489310888015405
+--------- Sample_226 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (389, 584)
+all_targets_2d shape: (389, 584)
+0.18426101 0.6201265
+-1.0 0.35058594
+MAE: 1.457227110862732, SSIM: -0.752821400580005
+--------- Sample_227 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (456, 459)
+all_targets_2d shape: (456, 459)
+0.11894274 0.599961
+-1.0 -0.018066406
+MAE: 1.2526289224624634, SSIM: -0.6015290147681288
+--------- Sample_228 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (282, 431)
+all_targets_2d shape: (282, 431)
+-0.42520574 0.30848283
+-1.0 -0.08935547
+MAE: 0.6376346945762634, SSIM: 0.08180901501280945
+--------- Sample_229 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (281, 243)
+all_targets_2d shape: (281, 243)
+0.36430365 0.72965485
+-1.0 0.21484375
+MAE: 1.340370535850525, SSIM: -0.694528921711292
+--------- Sample_230 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (261, 219)
+all_targets_2d shape: (261, 219)
+0.4948399 0.81200325
+-1.0 0.2211914
+MAE: 1.4301202297210693, SSIM: -0.7165393335097131
+--------- Sample_231 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (352, 379)
+all_targets_2d shape: (352, 379)
+-0.5088242 0.357522
+-1.0 0.0078125
+MAE: 0.7623701691627502, SSIM: 0.0627393618457758
+--------- Sample_232 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (526, 547)
+all_targets_2d shape: (526, 547)
+0.43208948 0.91983277
+-1.0 0.048339844
+MAE: 1.6030620336532593, SSIM: -0.7750256077579551
+--------- Sample_233 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (471, 499)
+all_targets_2d shape: (471, 499)
+-0.19511706 0.48771265
+-1.0 0.15332031
+MAE: 1.1616030931472778, SSIM: -0.4950167881715965
+--------- Sample_234 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (236, 219)
+all_targets_2d shape: (236, 219)
+0.016749315 0.43296608
+-1.0 0.30371094
+MAE: 0.9729004502296448, SSIM: -0.38521377772339904
+--------- Sample_235 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (348, 502)
+all_targets_2d shape: (348, 502)
+-0.6869518 0.26871786
+-1.0 0.7133789
+MAE: 0.41729602217674255, SSIM: 0.5254471036983479
+--------- Sample_236 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (404, 544)
+all_targets_2d shape: (404, 544)
+0.31821102 0.89941084
+-1.0 0.083984375
+MAE: 1.4763067960739136, SSIM: -0.7653528224092482
+--------- Sample_237 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (492, 494)
+all_targets_2d shape: (492, 494)
+0.17782299 0.7829845
+-1.0 0.045410156
+MAE: 1.2796204090118408, SSIM: -0.6901580139711897
+--------- Sample_238 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.5768248 0.85827655
+-1.0 0.98779297
+MAE: 1.3278456926345825, SSIM: -0.6857591676759304
+--------- Sample_239 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (238, 202)
+all_targets_2d shape: (238, 202)
+-0.32529783 0.35855064
+-1.0 0.22851562
+MAE: 0.6847535371780396, SSIM: -0.004793180857931199
+--------- Sample_240 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (293, 441)
+all_targets_2d shape: (293, 441)
+-0.6878942 0.3571824
+-1.0 0.0126953125
+MAE: 0.4282950162887573, SSIM: 0.44594290321642494
+--------- Sample_241 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (509, 579)
+all_targets_2d shape: (509, 579)
+-0.9630032 0.6094784
+-1.0 -0.05126953
+MAE: 0.208774596452713, SSIM: 0.6800780996006869
+--------- Sample_242 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (285, 403)
+all_targets_2d shape: (285, 403)
+0.087224685 0.61037564
+-1.0 0.019042969
+MAE: 1.0993661880493164, SSIM: -0.5950178597363998
+--------- Sample_243 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (302, 276)
+all_targets_2d shape: (302, 276)
+-0.11494446 0.46831083
+-1.0 0.26464844
+MAE: 1.1610589027404785, SSIM: -0.40601907932060916
+--------- Sample_244 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (302, 469)
+all_targets_2d shape: (302, 469)
+-0.8564862 0.2891141
+-1.0 -0.08251953
+MAE: 0.23379522562026978, SSIM: 0.6249498788923347
+--------- Sample_245 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (280, 457)
+all_targets_2d shape: (280, 457)
+0.4327429 0.79358584
+-1.0 0.080566406
+MAE: 1.3731577396392822, SSIM: -0.7740476818148625
+--------- Sample_246 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (310, 522)
+all_targets_2d shape: (310, 522)
+-0.7976655 0.3741482
+-1.0 0.08691406
+MAE: 0.32762429118156433, SSIM: 0.6055741049959913
+--------- Sample_247 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (469, 477)
+all_targets_2d shape: (469, 477)
+-0.02802838 0.6323847
+-1.0 -0.07128906
+MAE: 1.2687958478927612, SSIM: -0.5541879088430102
+--------- Sample_248 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.7314745 0.43953192
+-1.0 0.24413264
+MAE: 0.28386256098747253, SSIM: 0.5095364403742961
+--------- Sample_249 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (489, 483)
+all_targets_2d shape: (489, 483)
+0.52438533 0.85804194
+-1.0 -0.019042969
+MAE: 1.5562803745269775, SSIM: -0.8100990015118574
+--------- Sample_250 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 237)
+all_targets_2d shape: (270, 237)
+-1.0 0.27993873
+-1.0 0.24023438
+MAE: 0.03201194107532501, SSIM: 0.8895107183894693
+--------- Sample_251 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (474, 466)
+all_targets_2d shape: (474, 466)
+-0.6568552 0.40978
+-1.0 0.107421875
+MAE: 0.5338402390480042, SSIM: 0.4750435179454421
+--------- Sample_252 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (501, 542)
+all_targets_2d shape: (501, 542)
+-0.701242 0.96334654
+-1.0 0.06298828
+MAE: 0.5971105098724365, SSIM: 0.27409494703909726
+--------- Sample_253 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 243)
+all_targets_2d shape: (320, 243)
+-0.08923023 0.4823982
+-1.0 0.31933594
+MAE: 1.1620523929595947, SSIM: -0.431385405150787
+--------- Sample_254 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (241, 200)
+all_targets_2d shape: (241, 200)
+-1.0 0.3456542
+-1.0 0.29345703
+MAE: 0.05098170042037964, SSIM: 0.7932650634364928
+--------- Sample_255 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (276, 444)
+all_targets_2d shape: (276, 444)
+0.25025207 0.732207
+-1.0 0.15332031
+MAE: 1.22585928440094, SSIM: -0.6655465430239512
+--------- Sample_256 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 237)
+all_targets_2d shape: (270, 237)
+0.09943905 0.5235101
+-1.0 0.2529297
+MAE: 1.1094212532043457, SSIM: -0.5144739271439474
+--------- Sample_257 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (391, 399)
+all_targets_2d shape: (391, 399)
+-0.410495 0.47520605
+-1.0 0.82421875
+MAE: 0.7544248700141907, SSIM: 0.0753377169836242
+--------- Sample_258 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (306, 295)
+all_targets_2d shape: (306, 295)
+-1.0 0.8332671
+-1.0 0.22705078
+MAE: 0.08504000306129456, SSIM: 0.7965560434441902
+--------- Sample_259 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (404, 536)
+all_targets_2d shape: (404, 536)
+-1.0 1.0
+-1.0 0.1381836
+MAE: 0.08277353644371033, SSIM: 0.7820705727930786
+--------- Sample_260 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (263, 412)
+all_targets_2d shape: (263, 412)
+-1.0 -0.037830196
+-1.0 0.060058594
+MAE: 0.07228206098079681, SSIM: 0.8035471857125558
+--------- Sample_261 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (274, 234)
+all_targets_2d shape: (274, 234)
+0.06836187 0.5526945
+-1.0 0.24658203
+MAE: 1.1612781286239624, SSIM: -0.5688131783725309
+--------- Sample_262 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 279)
+all_targets_2d shape: (270, 279)
+-0.32517782 0.41131753
+-1.0 0.34277344
+MAE: 0.777729868888855, SSIM: 0.11478233395428207
+--------- Sample_263 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (256, 485)
+all_targets_2d shape: (256, 485)
+0.25382495 0.7621552
+-1.0 0.14160156
+MAE: 1.3584845066070557, SSIM: -0.7364222872997858
+--------- Sample_264 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (289, 433)
+all_targets_2d shape: (289, 433)
+-0.7674077 0.39412153
+-1.0 0.0107421875
+MAE: 0.27502068877220154, SSIM: 0.614119572236169
+--------- Sample_265 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (511, 579)
+all_targets_2d shape: (511, 579)
+-0.4572314 0.51351154
+-1.0 0.029296875
+MAE: 0.9342169761657715, SSIM: -0.054341880799134996
+--------- Sample_266 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (274, 229)
+all_targets_2d shape: (274, 229)
+-0.50617725 0.53501356
+-1.0 0.27441406
+MAE: 0.5465108752250671, SSIM: 0.3443154193923224
+--------- Sample_267 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (383, 499)
+all_targets_2d shape: (383, 499)
+-0.50906104 0.40903714
+-1.0 0.23828125
+MAE: 0.79326331615448, SSIM: 0.18862871827302
+--------- Sample_268 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (362, 439)
+all_targets_2d shape: (362, 439)
+0.5020102 0.8733625
+-1.0 -0.10839844
+MAE: 1.5292402505874634, SSIM: -0.8268350351981839
+--------- Sample_269 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 501)
+all_targets_2d shape: (447, 501)
+-0.540579 0.5449637
+-1.0 0.14160156
+MAE: 0.7979623675346375, SSIM: 0.06675275445916645
+--------- Sample_270 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (518, 590)
+all_targets_2d shape: (518, 590)
+-0.26759568 0.47777894
+-1.0 0.8154297
+MAE: 1.1606799364089966, SSIM: -0.4017754532408558
+--------- Sample_271 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (260, 251)
+all_targets_2d shape: (260, 251)
+0.12362617 0.70111567
+-1.0 0.98779297
+MAE: 1.2293866872787476, SSIM: -0.602511599548085
+--------- Sample_272 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (519, 576)
+all_targets_2d shape: (519, 576)
+0.1443243 0.76431745
+-1.0 0.10839844
+MAE: 1.3280866146087646, SSIM: -0.6570769844060524
+--------- Sample_273 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (257, 221)
+all_targets_2d shape: (257, 221)
+0.672771 0.97940737
+-1.0 0.20166016
+MAE: 1.6044440269470215, SSIM: -0.7176251762960907
+--------- Sample_274 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (512, 584)
+all_targets_2d shape: (512, 584)
+-0.4934739 0.5357245
+-1.0 0.6352539
+MAE: 0.866747260093689, SSIM: -0.018974695730045545
+--------- Sample_275 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (258, 231)
+all_targets_2d shape: (258, 231)
+0.100978315 0.51780015
+-1.0 0.2705078
+MAE: 1.0770801305770874, SSIM: -0.4911498824836643
+--------- Sample_276 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (247, 190)
+all_targets_2d shape: (247, 190)
+0.43211567 0.7713907
+-1.0 0.95166016
+MAE: 1.3375011682510376, SSIM: -0.6519683831813547
+--------- Sample_277 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (493, 491)
+all_targets_2d shape: (493, 491)
+-0.21585114 0.49319994
+-1.0 0.28125
+MAE: 1.024959921836853, SSIM: -0.44321529998580766
+--------- Sample_278 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (495, 556)
+all_targets_2d shape: (495, 556)
+-0.5305552 0.60981613
+-1.0 0.10595703
+MAE: 0.7530385255813599, SSIM: 0.13478900020080153
+--------- Sample_279 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (486, 499)
+all_targets_2d shape: (486, 499)
+-0.75304615 0.34153017
+-1.0 -0.001953125
+MAE: 0.6021725535392761, SSIM: 0.355971311532635
+--------- Sample_280 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (248, 216)
+all_targets_2d shape: (248, 216)
+0.27039793 0.6104188
+-1.0 0.31201172
+MAE: 1.1613624095916748, SSIM: -0.6095265425782281
+--------- Sample_281 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (504, 551)
+all_targets_2d shape: (504, 551)
+-0.76458555 0.3124705
+-1.0 0.22802734
+MAE: 0.4941159188747406, SSIM: 0.5175841584775468
+--------- Sample_282 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (490, 542)
+all_targets_2d shape: (490, 542)
+-0.55782294 0.6068759
+-1.0 0.25097656
+MAE: 0.7771127223968506, SSIM: 0.11814500890882598
+--------- Sample_283 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (286, 454)
+all_targets_2d shape: (286, 454)
+-0.05792959 0.6161659
+-1.0 0.07910156
+MAE: 1.1297969818115234, SSIM: -0.6502127157766848
+--------- Sample_284 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (322, 565)
+all_targets_2d shape: (322, 565)
+-1.0 0.13432796
+-1.0 0.013671875
+MAE: 0.05664109066128731, SSIM: 0.8425863747743209
+--------- Sample_285 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+-0.08965397 0.52237153
+-1.0 0.4877262
+MAE: 0.7980437278747559, SSIM: -0.5513419208549787
+--------- Sample_286 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (269, 276)
+all_targets_2d shape: (269, 276)
+-0.99261856 0.44858858
+-1.0 0.3178711
+MAE: 0.09358957409858704, SSIM: 0.8315017445917982
+--------- Sample_287 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (303, 495)
+all_targets_2d shape: (303, 495)
+-0.56581444 0.5223805
+-1.0 0.029785156
+MAE: 0.6804841756820679, SSIM: 0.24203590033044134
+--------- Sample_288 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (291, 288)
+all_targets_2d shape: (291, 288)
+-0.80436987 0.23993267
+-1.0 0.98779297
+MAE: 0.305560439825058, SSIM: 0.735015513228477
+--------- Sample_289 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (506, 571)
+all_targets_2d shape: (506, 571)
+-0.8299747 0.2418066
+-1.0 0.29003906
+MAE: 0.4858021140098572, SSIM: 0.4737178466470787
+--------- Sample_290 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (454, 487)
+all_targets_2d shape: (454, 487)
+-0.17906259 0.39183292
+-1.0 0.030273438
+MAE: 0.9463276267051697, SSIM: -0.2926767453012369
+--------- Sample_291 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.87541187 0.10531657
+-1.0 -0.011220217
+MAE: 0.2206103652715683, SSIM: 0.6638705993440026
+--------- Sample_292 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (289, 482)
+all_targets_2d shape: (289, 482)
+-0.94801235 0.5826631
+-1.0 0.022460938
+MAE: 0.13397572934627533, SSIM: 0.7700815432813093
+--------- Sample_293 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (320, 384)
+all_targets_2d shape: (320, 384)
+-0.8327598 0.26185924
+-1.0 -0.14498013
+MAE: 0.36859020590782166, SSIM: 0.5493958906119706
+--------- Sample_294 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (465, 472)
+all_targets_2d shape: (465, 472)
+-0.3206108 0.40661514
+-1.0 -0.10107422
+MAE: 1.002097249031067, SSIM: -0.2370142208085649
+--------- Sample_295 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (258, 216)
+all_targets_2d shape: (258, 216)
+0.47113624 0.8457777
+-1.0 0.23486328
+MAE: 1.4281162023544312, SSIM: -0.6763291809632995
+--------- Sample_296 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (254, 223)
+all_targets_2d shape: (254, 223)
+-0.27475822 0.27199057
+-1.0 0.15576172
+MAE: 0.7831572890281677, SSIM: 0.035759455202620714
+--------- Sample_297 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (356, 529)
+all_targets_2d shape: (356, 529)
+-1.0 0.07716274
+-1.0 0.3022461
+MAE: 0.05479990690946579, SSIM: 0.8807574111457284
+--------- Sample_298 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (307, 461)
+all_targets_2d shape: (307, 461)
+-0.12953255 0.4293115
+-1.0 0.08496094
+MAE: 0.9281724691390991, SSIM: -0.3332268829797753
+--------- Sample_299 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (264, 432)
+all_targets_2d shape: (264, 432)
+-0.45134646 0.28841
+-1.0 0.053222656
+MAE: 0.6155437231063843, SSIM: 0.14652844071091561
+--------- Sample_300 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (475, 469)
+all_targets_2d shape: (475, 469)
+-1.0 -0.014233442
+-1.0 0.05126953
+MAE: 0.04307500645518303, SSIM: 0.8632223921265847
+--------- Sample_301 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (444, 467)
+all_targets_2d shape: (444, 467)
+-0.4666572 0.4072966
+-1.0 0.19042969
+MAE: 0.8974777460098267, SSIM: -0.041356484671776154
+--------- Sample_302 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (280, 262)
+all_targets_2d shape: (280, 262)
+-0.3989895 0.39992696
+-1.0 0.6279297
+MAE: 0.7153581976890564, SSIM: 0.16387560063042977
+--------- Sample_303 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (447, 445)
+all_targets_2d shape: (447, 445)
+-0.5758182 0.36610729
+-1.0 0.0703125
+MAE: 0.6604523062705994, SSIM: 0.1848497740611906
+--------- Sample_304 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (511, 546)
+all_targets_2d shape: (511, 546)
+-0.48247114 0.47483385
+-1.0 0.98828125
+MAE: 0.9522889852523804, SSIM: -0.047262762902872686
+--------- Sample_305 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (243, 207)
+all_targets_2d shape: (243, 207)
+0.2807121 0.70841616
+-1.0 0.25585938
+MAE: 1.1757044792175293, SSIM: -0.6007507770643596
+--------- Sample_306 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (239, 200)
+all_targets_2d shape: (239, 200)
+-0.5779778 0.37182167
+-1.0 0.3305664
+MAE: 0.45368605852127075, SSIM: 0.37276241015662337
+--------- Sample_307 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (267, 277)
+all_targets_2d shape: (267, 277)
+0.22185168 0.60918105
+-1.0 0.30029297
+MAE: 1.3172975778579712, SSIM: -0.6514257120327926
+--------- Sample_308 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (299, 470)
+all_targets_2d shape: (299, 470)
+-0.2137128 0.38263077
+-1.0 0.3491211
+MAE: 0.8157081604003906, SSIM: -0.156653986101264
+--------- Sample_309 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (258, 236)
+all_targets_2d shape: (258, 236)
+0.3363174 0.7386979
+-1.0 0.24609375
+MAE: 1.3251934051513672, SSIM: -0.6355424174127259
+--------- Sample_310 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (243, 227)
+all_targets_2d shape: (243, 227)
+-0.6605178 0.62862974
+-1.0 0.28125
+MAE: 0.4235423803329468, SSIM: 0.42498473144890186
+--------- Sample_311 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (356, 516)
+all_targets_2d shape: (356, 516)
+-0.24012576 0.5989744
+-1.0 0.24609375
+MAE: 1.2337032556533813, SSIM: -0.467872311935469
+--------- Sample_312 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (265, 231)
+all_targets_2d shape: (265, 231)
+0.5837117 0.8948656
+-1.0 0.22167969
+MAE: 1.4965797662734985, SSIM: -0.7079962081208578
+--------- Sample_313 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (243, 224)
+all_targets_2d shape: (243, 224)
+-0.99214834 0.35657543
+-1.0 0.20703125
+MAE: 0.071729876101017, SSIM: 0.8425049399597124
+--------- Sample_314 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (282, 430)
+all_targets_2d shape: (282, 430)
+-0.57913077 0.3236456
+-1.0 0.068847656
+MAE: 0.5589872002601624, SSIM: 0.14135731670080737
+--------- Sample_315 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (321, 564)
+all_targets_2d shape: (321, 564)
+-0.6487652 0.2733661
+-1.0 0.0087890625
+MAE: 0.42182978987693787, SSIM: 0.504929936410795
+--------- Sample_316 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (465, 481)
+all_targets_2d shape: (465, 481)
+-0.76041275 0.39415938
+-1.0 0.10107422
+MAE: 0.5019564628601074, SSIM: 0.5525232532221979
+--------- Sample_317 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (459, 464)
+all_targets_2d shape: (459, 464)
+-0.10131377 0.44918635
+-1.0 0.18359375
+MAE: 1.0625401735305786, SSIM: -0.3930197039639475
+--------- Sample_318 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (370, 563)
+all_targets_2d shape: (370, 563)
+-0.24192317 0.40476823
+-1.0 0.98779297
+MAE: 1.140272855758667, SSIM: -0.3524858223310336
+--------- Sample_319 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (506, 547)
+all_targets_2d shape: (506, 547)
+-0.84770817 0.35523644
+-1.0 0.14550781
+MAE: 0.5342298746109009, SSIM: 0.47134782161214606
+--------- Sample_320 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (292, 496)
+all_targets_2d shape: (292, 496)
+-0.44459978 0.30634567
+-1.0 0.049316406
+MAE: 0.6434333920478821, SSIM: 0.09399616372647622
+--------- Sample_321 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (450, 459)
+all_targets_2d shape: (450, 459)
+0.18525024 0.62481284
+-1.0 0.013671875
+MAE: 1.2165660858154297, SSIM: -0.678458453826585
+--------- Sample_322 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (283, 473)
+all_targets_2d shape: (283, 473)
+-0.856392 0.1958685
+-1.0 -0.0029296875
+MAE: 0.25585561990737915, SSIM: 0.6580273158359892
+--------- Sample_323 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (254, 510)
+all_targets_2d shape: (254, 510)
+-0.34637251 0.45796788
+-1.0 0.17578125
+MAE: 0.8229143023490906, SSIM: -0.09012558901252446
+--------- Sample_324 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (268, 279)
+all_targets_2d shape: (268, 279)
+-0.48567665 0.51635027
+-1.0 0.31933594
+MAE: 0.6171374320983887, SSIM: 0.41570565277972
+--------- Sample_325 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (271, 443)
+all_targets_2d shape: (271, 443)
+0.42972216 0.85499406
+-1.0 0.049316406
+MAE: 1.433729648590088, SSIM: -0.7882412978547365
+--------- Sample_326 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (319, 533)
+all_targets_2d shape: (319, 533)
+-0.6150478 0.30822065
+-1.0 0.11035156
+MAE: 0.4937523603439331, SSIM: 0.44378738900196574
+--------- Sample_327 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (470, 477)
+all_targets_2d shape: (470, 477)
+0.27560174 0.8372375
+-1.0 0.084472656
+MAE: 1.5247658491134644, SSIM: -0.7571940200746838
+--------- Sample_328 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (270, 280)
+all_targets_2d shape: (270, 280)
+-0.40472636 0.4031105
+-1.0 0.2685547
+MAE: 0.752751886844635, SSIM: 0.22317960716045593
+--------- Sample_329 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (448, 505)
+all_targets_2d shape: (448, 505)
+0.38929003 0.81090206
+-1.0 0.12109375
+MAE: 1.5170469284057617, SSIM: -0.7939266670344152
+--------- Sample_330 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (426, 483)
+all_targets_2d shape: (426, 483)
+-0.44634494 0.3869788
+-1.0 -0.020996094
+MAE: 0.6754790544509888, SSIM: 0.1355267127063144
+--------- Sample_331 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (238, 206)
+all_targets_2d shape: (238, 206)
+0.16022423 0.5711526
+-1.0 0.38183594
+MAE: 1.0491458177566528, SSIM: -0.5204915122684775
+--------- Sample_332 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (451, 461)
+all_targets_2d shape: (451, 461)
+-0.5079588 0.80100334
+-1.0 -0.072265625
+MAE: 0.7332910299301147, SSIM: 0.14245536248848475
+--------- Sample_333 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (471, 472)
+all_targets_2d shape: (471, 472)
+-0.46641108 0.48676032
+-1.0 0.21484375
+MAE: 0.7151086330413818, SSIM: 0.14453716990031099
+--------- Sample_334 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (444, 450)
+all_targets_2d shape: (444, 450)
+-0.81066513 0.24337074
+-1.0 0.099121094
+MAE: 0.36177778244018555, SSIM: 0.6100902613298596
+--------- Sample_335 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (473, 481)
+all_targets_2d shape: (473, 481)
+-0.19621828 0.47631952
+-1.0 -0.021972656
+MAE: 1.1234451532363892, SSIM: -0.370025292034127
+--------- Sample_336 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.08126527 0.5337323
+-1.0 0.20241296
+MAE: 0.8933259844779968, SSIM: -0.5395213974984593
+--------- Sample_337 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (364, 588)
+all_targets_2d shape: (364, 588)
+-0.90711135 0.27325684
+-1.0 0.24023438
+MAE: 0.39827972650527954, SSIM: 0.6030744238676242
+--------- Sample_338 saved!! ----------------
+T 1000 infer_T 1000
+final_gen shape: (220, 220)
+all_targets_2d shape: (220, 220)
+0.49034852 0.8687303
+-1.0 0.5300126
+MAE: 1.3396106958389282, SSIM: -0.6812982203697293
+--------- Sample_339 saved!! ----------------
+Average MAE: 0.8167486786842346, Average SSIM: -0.035608116189040404
