@@ -69,7 +69,7 @@ def main(config):
         raise Exception('Unsupported model')
     
     if final:
-        checkpoint_dir = identifier + '/checkpoint_newnet'
+        checkpoint_dir = identifier + '/checkpoint_1'
         log_dir = identifier + '/logs'
         # train_data_dir = identifier + '/data_training'    # 3个小数据集
         # train_data_dir = dir + '/data_training'   # 全部数据
@@ -84,8 +84,8 @@ def main(config):
         output_path = identifier + '/output/cv/' + os.path.basename(deploy_input.strip('/'))
     
     if deploy_input == '':
-        deploy_input = dir + '/data_training/test'
-        # deploy_input = identifier + '/data_training' # 小数据测试
+        deploy_input = dir + '/data_training/test_30'
+        # deploy_input = identifier + '/data_training' # train data测试
         
     training_paths = [os.path.join(train_data_dir, name) for name in os.listdir(train_data_dir) if name.endswith('.hdf5')and name.startswith('synthrad')]
     testing_paths = [os.path.join(deploy_input, name) for name in os.listdir(deploy_input) if '.hdf5' in name and name.startswith('synthrad')]
@@ -166,16 +166,17 @@ def main(config):
         training_paths = [p for p in training_paths]
         validation_paths = [p for p in testing_paths]
         im_size = [256, 256]
+        #im_size = [32, 256, 256]
         input_channels = 2    # x + c
         output_channels = 1
 
 
 
         model_config = {
-            'epoch': 250, 
-            'batch_size': 4,
-            'iters_per_epoch': 400,   # 每个epoch的迭代次数
-            'save_period': 50,
+            'epoch': 170, 
+            'batch_size': 8,
+            'iters_per_epoch': 4000,   # 每个epoch的迭代次数
+            'save_period': 20,
             'optimizer_type': 'Adam',
             'initial_lr': 1e-4,
             'norm_config': {'norm': False, 'norm_channels': [0],
@@ -187,7 +188,9 @@ def main(config):
             # 添加扩散模型参数
             # 'is_diffusion': True,
             'beta_1': 0.0001,
-            'beta_T': 0.02
+            'beta_T': 0.02,
+            'infer_T': 100,
+            #'squeue': 250
 
         }
 
@@ -334,7 +337,7 @@ def main(config):
             return add_rician_noise(x, fg_mask, min_sigma, max_sigma)
                 
         model_config = {
-            'epoch': 2000, 
+            'epoch': 200, 
             'batch_size': 8,
             'iters_per_epoch': 1280,
             'save_period': 100,
@@ -369,13 +372,13 @@ def main(config):
 
     if is_train:
         if model_name == 'DDPM':
-            model.diffusion_train()
+            model.diffusion_train(run_validation=True, validation_paths=validation_paths)
         else:
-          # model.train(run_validation=True, validation_paths=validation_paths)
-          model.train(run_validation=False)
+          model.train(run_validation=True, validation_paths=validation_paths)
     else:
         if model_name == 'DDPM':
-            model.diffusion_test(testing_paths=validation_paths, output_path=None, squeue=None, all_slice=False)
+            #model.diffusion_test(testing_paths=validation_paths, output_path=output_path, squeue=250, all_slice=True)
+            model.diffusion_test_batch(testing_paths=validation_paths, output_path=output_path, batch_size=16, sampler='ddim')
         else:
             model.test(validation_paths, output_path)
 

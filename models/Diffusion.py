@@ -1,4 +1,3 @@
-
 import numpy as np
 from functools import partial
 import tensorflow as tf
@@ -196,7 +195,7 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
                 eps = eps[0]
 
         x_recon = self.predict_start_from_noise(x_t, t=t, noise=eps)
-        x_recon = tf.clip_by_value(x_recon, -1, 1)  # 限制到 [-1, 1] 范围
+        x_recon = tf.clip_by_value(x_recon, 0, 1)  # 限制到 [-1, 1] 范围
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x_t, t=t)
         return model_mean, posterior_log_variance
 
@@ -226,18 +225,87 @@ class GaussianDiffusionSampler(tf.keras.layers.Layer):
             assert tf.reduce_sum(tf.cast(tf.math.is_nan(x_t), tf.int32)) == 0, "nan in tensor."
             infer_num += 1
             if self.squeue is not None:
-              # If in the last 300 steps and step number is divisible by 100
-              if time_step <= 300 and time_step % 100 == 0:
-                x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, -1, 1)], axis=-1)
-              # Otherwise use original logic
-              elif time_step > 300 and infer_num % int(self.squeue) == 0:
-                x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, -1, 1)], axis=-1)
-        x_0 = x_t
-        x0 = tf.clip_by_value(x_0, -1, 1)
+              if time_step % int(self.squeue) == 0:
+                x_squeue = tf.concat([x_squeue, tf.clip_by_value(x_t, 0, 1)], axis=-1)
+
         if self.squeue is not None:
-            x0 = x_squeue[..., 1:]  # 去掉第一个0数据
+            # x0 = x_squeue[..., 1:]  # 去掉第一个纯噪声数据
+            x0 = x_squeue # save 999,750,500,250,0
+        else:
+            x0 = tf.clip_by_value(x_t, 0, 1)
 
         return x0
+
+    def ddim_reverse(self, x_T, context=None, eta=1.0):
+        """
+        DDIM采样加速
+        x_T: 初始噪声
+        ddim_steps: 采样步数
+        eta: 控制采样随机性（0为确定性采样，1为全随机）
+        """
+        import numpy as np
+        x_t = x_T
+        T = self.T
+        # 1. 生成采样步序列
+        ddim_steps = self.infer_T
+        #print('T', T, 'ddim_steps', ddim_steps)
+        ddim_timesteps = np.linspace(T-1, 0, ddim_steps).astype(np.int32)   # T-1 -> 0
+        
+        #step_size = T // ddim_steps
+        #ddim_timesteps = np.arange(0, T, step_size)[::-1]
+        #print(ddim_timesteps[:5],ddim_timesteps[-5:])
+        for i in range(len(ddim_timesteps) - 1):
+            t = tf.ones((x_t.shape[0],), dtype=tf.int32) * ddim_timesteps[i]
+            t_prev = tf.ones((x_t.shape[0],), dtype=tf.int32) * ddim_timesteps[i + 1]
+
+            # 2. 预测噪声
+            if context is not None:
+                x_concat = tf.concat([x_t, context], axis=-1)
+                eps = self.model([x_concat, t])
+                if isinstance(eps, list):
+                    eps = eps[0]
+            else:
+                eps = self.model([x_t, t])
+                if isinstance(eps, list):
+                    eps = eps[0]
+
+            # 3. 计算alpha相关参数
+            alpha_t = _extract(self.alphas_cumprod, t, x_t.shape)
+            alpha_prev = _extract(self.alphas_cumprod, t_prev, x_t.shape)
+            sqrt_alpha_t = tf.sqrt(alpha_t)
+            sqrt_one_minus_alpha_t = tf.sqrt(1. - alpha_t)
+            sigma = eta * tf.sqrt((1 - alpha_prev) / (1 - alpha_t)) * tf.sqrt(1 - alpha_t / alpha_prev)
+            c1 = tf.sqrt(alpha_prev)
+            c2 = tf.sqrt(1. - alpha_prev - sigma**2)
+
+            # 4. 预测x0
+            x0_pred = (x_t - sqrt_one_minus_alpha_t * eps) / sqrt_alpha_t
+            x0_pred = tf.clip_by_value(x0_pred, 0, 1)    ##
+
+            # 5. DDIM采样公式
+            noise = tf.random.normal(tf.shape(x_t)) if eta > 0 else 0.0
+            x_t = c1 * x0_pred + c2 * eps + sigma * noise
+
+        # 最后一步
+        t = tf.ones((x_t.shape[0],), dtype=tf.int32) * ddim_timesteps[-1]
+        if context is not None:
+            x_concat = tf.concat([x_t, context], axis=-1)
+            eps = self.model([x_concat, t])
+            if isinstance(eps, list):
+                eps = eps[0]
+        else:
+            eps = self.model([x_t, t])
+            if isinstance(eps, list):
+                eps = eps[0]
+        alpha_t = _extract(self.alphas_cumprod, t, x_t.shape)
+        sqrt_alpha_t = tf.sqrt(alpha_t)
+        sqrt_one_minus_alpha_t = tf.sqrt(1. - alpha_t)
+        x0_pred = (x_t - sqrt_one_minus_alpha_t * eps) / sqrt_alpha_t
+
+        return tf.clip_by_value(x0_pred, 0, 1)
+    
+
+
 
 
 

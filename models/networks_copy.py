@@ -42,6 +42,7 @@ build_*   - a ready-to-use built model.
 
 #     return temb
 
+# Sinusoidal Random Fourier Features
 def TimeEmbedding(x, embed_dim, scale=30., W=None):
     """
     x: [batch] int32 或 float32
@@ -150,10 +151,10 @@ def Upsample_module_diff(in_filters, dim, tdim, name=None, **kwargs):
     """
     if dim == 2:
         myconv = layers.Conv2D
-        myup = layers.UpSampling2D
+        myup = lambda: layers.UpSampling2D(size=2, interpolation='nearest')
     elif dim == 3:
         myconv = layers.Conv3D
-        myup = layers.UpSampling3D
+        myup = lambda: layers.UpSampling3D(size=2)  # interpolation='nearest' is not available in Conv3D
     else:
         raise ValueError('Dimension must be 2 or 3')
 
@@ -161,7 +162,7 @@ def Upsample_module_diff(in_filters, dim, tdim, name=None, **kwargs):
     t_input = layers.Input([tdim,], name='time_input')
     x = x_input
 
-    x = myup(size=2, interpolation='nearest')(x)  # 上采样
+    x = myup()(x)  # 上采样
     x = myconv(in_filters, kernel_size=3, strides=1, padding='same',    # 卷积
                kernel_initializer=GlorotUniform(), bias_initializer=Zeros())(x)
 
@@ -325,7 +326,7 @@ def build_diffusion_unet(
 if __name__ == "__main__":
 
   diffusion_unet = build_diffusion_unet(
-      im_size=[64, 64],
+      im_size=[64, 64, 64],
       nclass=1,
       input_channels=2,
       features_root=64,
@@ -339,12 +340,12 @@ if __name__ == "__main__":
   )
         
   # 使用时在外部拼接
-  x = tf.random.normal([2, 64, 64, 1])  # 主图像
-  c = tf.random.normal([2, 64, 64, 1])  # context图像
+  x = tf.random.normal([2, 64, 64, 64, 1])  # 主图像
+  c = tf.random.normal([2, 64, 64, 64, 1])  # context图像
   t = tf.constant([100, 200])               # 时间步，批次大小要匹配
 
   # 在调用模型前手动拼接
   input_concat = tf.concat([x, c], axis=-1)
-  print('input_concat.shape:', input_concat.shape)  # [2, 64, 64, 2]
-  output2 = diffusion_unet([input_concat, t]) 
-  print('output2.shape:', output2.shape)  # [2, 64, 64, 1]
+  print('input_concat.shape:', input_concat.shape)  # [2, 64, 64, 64, 2]
+  output2 = diffusion_unet([input_concat, t])
+  print('output2.shape:', output2.shape)  # [2, 64, 64, 64, 1]

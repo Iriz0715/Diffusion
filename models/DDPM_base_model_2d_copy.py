@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 
 from augmentation import *
 from Diffusion import GaussianDiffusionTrainer, GaussianDiffusionSampler
-from skimage.transform import resize
-import time
-import scipy.io as sio
 from skimage.metrics import structural_similarity as ssim
 
 AUGMENTATION_PARAMS = {
@@ -58,17 +55,15 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, '*.h5')))
         if len(ckpt_files) >= max_to_keep:    # 自动删除多余旧文件
             os.remove(ckpt_files[0])
-
-
+        
         self.unet.save(os.path.join(checkpoint_dir, 'model_epoch%06d.h5' % step))
-
-
+    
     def load(self):
         checkpoint_dir = os.path.join(self.checkpoint_dir, self.model_dir)
         if not os.path.exists(checkpoint_dir):
             print('No model is found, please train first')
             return False, 0
-        ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, 'model_epoch*.h5')))
+        ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, '*.h5')))
         if ckpt_files:
             ckpt_file = ckpt_files[-1]
             ckpt_name = os.path.basename(ckpt_file)
@@ -244,7 +239,10 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         return mixup_array
     
 
-    def read_training_inputs(self, file, im_size, enlarged_im_size, augmentation=True):
+
+
+
+    def read_training_inputs_files(self,file):
         to_simulate = False
         input_images = None
         input_images_mask = None
@@ -276,17 +274,21 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         if input_images_mask is not None and output_images_mask is not None:
             # Use the pixels that the two are the same as the mask
             mask = input_images_mask == output_images_mask
-        
-        # Our 2D image dim standard is [batch(always=1 / maybe missing), h, w, channel(maybe missing)]
-        # In training, we random choose one slice in batch, and drop batch dim
-        if len(input_images.shape) == 4:
-            full_size = list(input_images.shape)[1:-1]
-            sli = np.random.choice(input_images.shape[0])
-            input_images = input_images[sli]
-            output_images = output_images[sli]
-            if mask is not None:
-                mask = mask[sli]
-        elif len(input_images.shape) == 3:
+
+        return input_images, output_images, mask, to_simulate
+
+
+    def read_training_inputs(self, file, im_size, enlarged_im_size, augmentation=True):
+        input_images, output_images, mask, to_simulate = self.read_training_inputs_files(file)
+
+        # if len(input_images.shape) == 4:
+        #     full_size = list(input_images.shape)[1:-1]
+        #     sli = np.random.choice(input_images.shape[0])
+        #     input_images = input_images[sli]
+        #     output_images = output_images[sli]
+        #     if mask is not None:
+        #         mask = mask[sli]
+        if len(input_images.shape) == 3:
             if self.input_channels == input_images.shape[-1]:
                 full_size = list(input_images.shape)[:-1]
             else:
@@ -580,367 +582,115 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             pbar.set_postfix({'val_scores': [np.mean(mae_after), np.mean(ssim_after)]})
         return {'mae': np.mean(mae_after), 'ssim': np.mean(ssim_after)}
     
-
-
-
-
-
-
-
-
-    
-
-
-    @staticmethod
-    # resize
-    def pad_and_resize(image, target_size=(256, 256)):
-      h, w = image.shape
-      pad_h = max(target_size[0] - h, 0)
-      pad_w = max(target_size[1] - w, 0)
-      pad_with = ((pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2))
-      image_padded = np.pad(image, pad_with, mode='constant')
-      image_resized = resize(image_padded, target_size, preserve_range=True, anti_aliasing=True).astype(np.float32)
-      return image_resized
-
-
-    ## 一次性读取所有数据，容易OOM，暂时不用
-    def build_all_slice_dataset(self, folder_path, target_size=(256, 256), batch_size=8, shuffle=True, slice_mode='all', data_mode='train'):
-        """
-        一次性读取所有hdf5文件的所有slice，返回tf.data.Dataset
-        Args:
-            folder_path: hdf5文件夹路径（支持str或list）
-            target_size: resize目标尺寸
-            shuffle: 是否打乱
-            batch_size: 批大小
-        Returns:
-            tf.data.Dataset
-        """
-        # 收集所有slice
-        input_images = []
-        output_images = []
-        all_files = []
-        if isinstance(folder_path, (list, tuple)):
-            for single_folder in folder_path:
-                if isinstance(single_folder, (list, tuple)):
-                    # 防止嵌套list
-                    for sub_folder in single_folder:
-                        all_files.extend(sorted(glob.glob(os.path.join(str(sub_folder)))))
-                else:
-                    all_files.extend(sorted(glob.glob(os.path.join(str(single_folder)))))
-        else:
-            all_files = sorted(glob.glob(os.path.join(str(folder_path))))
-        file_list = all_files
-        if data_mode == 'valid':
-            file_list = file_list[:10]
-        for file_path in file_list:
-            with h5py.File(file_path, 'r') as f_h5:
-                input_imgs = np.asarray(f_h5['input_images'], dtype=np.float32)
-                output_imgs = np.asarray(f_h5['output_images'], dtype=np.float32)
-                # input_images = input_images * 2. - 1.  ############ Scale to [-1, 1]
-                # output_images = output_images * 2. - 1. ############ Scale to [-1, 1]
-                if slice_mode == 'all':
-                    idxs = range(input_imgs.shape[0])
-                elif slice_mode == 'random':
-                    idxs = [random.randint(0, input_imgs.shape[0] - 1)]
-                elif slice_mode == 'center':
-                    idxs = [input_imgs.shape[0] // 2]
-                for i in idxs:
-                    input_images.append(self.pad_and_resize(input_imgs[i], target_size))
-                    output_images.append(self.pad_and_resize(output_imgs[i], target_size))
-        input_images = np.array(input_images)
-        output_images = np.array(output_images)
-        input_images = np.expand_dims(input_images, axis=-1)
-        output_images = np.expand_dims(output_images, axis=-1)
-
-        # 构建 tf.data.Dataset
-        ds = tf.data.Dataset.from_tensor_slices((input_images, output_images))
-        if shuffle:
-            ds = ds.shuffle(buffer_size=len(input_images))
-        ds = ds.batch(batch_size)
-        ds = ds.prefetch(tf.data.AUTOTUNE)
-        return ds
-
-    ## 每次 batch 从磁盘读取数据，边读边处理
-    def hdf5_slice_generator(self, folder_path, target_size, model_mode='train', slice_mode='all'):
-        # 支持 folder_path 为 str 或 list/tuple
-        all_files = []
-        if isinstance(folder_path, (list, tuple)):
-            for single_folder in folder_path:
-                if isinstance(single_folder, (list, tuple)):
-                    # 防止嵌套list
-                    for sub_folder in single_folder:
-                        all_files.extend(sorted(glob.glob(os.path.join(str(sub_folder)))))
-                else:
-                    all_files.extend(sorted(glob.glob(os.path.join(str(single_folder)))))
-        else:
-            all_files = sorted(glob.glob(os.path.join(str(folder_path))))
-        if model_mode == 'train':
-            file_list = all_files
-        elif model_mode == 'valid':
-            file_list = all_files[:2]
-        elif model_mode == 'test':
-            #file_list = all_files[10:]
-            file_list = all_files
-        else:
-            print("Invalid mode")
-
-        for file_idx, file_path in enumerate(file_list):
-            with h5py.File(file_path, 'r') as f_h5:
-                input_imgs = np.asarray(f_h5['input_images'], dtype=np.float32)
-                output_imgs = np.asarray(f_h5['output_images'], dtype=np.float32)
-                # input_images = input_images * 2. - 1.  ############ Scale to [-1, 1]
-                # output_images = output_images * 2. - 1. ############ Scale to [-1, 1]
-                if slice_mode == 'all':
-                    idxs = range(input_imgs.shape[0])
-                elif slice_mode == 'random':
-                    idxs = [np.random.randint(0, input_imgs.shape[0])]
-                elif slice_mode == 'center':
-                    idxs = [input_imgs.shape[0] // 2]
-
-                for i in idxs:
-                    input_img = self.pad_and_resize(input_imgs[i], target_size)
-                    output_img = self.pad_and_resize(output_imgs[i], target_size)
-                    input_img = np.expand_dims(input_img, axis=-1)
-                    output_img = np.expand_dims(output_img, axis=-1)
-                    yield input_img, output_img, file_idx
-
-    def get_tf_dataset(self, folder_path, target_size, model_mode='train', slice_mode='all', batch_size=8, shuffle=True):
-        output_types = (tf.float32, tf.float32, tf.int32)
-        output_shapes = ((target_size[0], target_size[1], 1), (target_size[0], target_size[1], 1), ())
-        ds = tf.data.Dataset.from_generator(
-            lambda: self.hdf5_slice_generator(folder_path, target_size, model_mode, slice_mode),
-            output_types=output_types,
-            output_shapes=output_shapes
-        )
-        if shuffle:
-            ds = ds.shuffle(buffer_size=1000)
-        ds = ds.batch(batch_size)
-        ds = ds.prefetch(tf.data.AUTOTUNE)
-        return ds
-
-    ############ 20250724
-    def diffusion_train(self, run_validation=False, validation_paths=None, **kwargs):
-        """
-        完善的扩散模型训练方法，参考 DDPM_base_model_2d.train()
+    # can be overwritten by inherited model
+    @tf.function
+    def train_step(self, data):
+        input_patch, target_patch, mask = data
         
-        Args:
-            run_validation: 是否运行验证
-            validation_paths: 验证集文件路径列表
-        """
-        print("开始扩散模型训练...")
-        # Compile model for training
-        self.compile_it()
-        log_dir = os.path.join(self.log_dir, self.model_dir)
-        
-        validation_config = None
-        if run_validation:
-            validation_config = {
-                'validation_paths': validation_paths,
-                'validation_fn': self.validate_diffusion,
-                'log_dir': log_dir,
-            }
-        saver_config = {
-            'period': self.save_period,
-            'save_fn': self.save,
-            'log_dir': log_dir,
-        }
-        saver_callback = self.DiffusionModelSaver(saver_config=saver_config, validation_config=validation_config)
-        
-        # Prepare data generator
-        num_samples = len(self.training_paths)
-        if num_samples == 0:
-            print('No training data')
-            return
-        
-        # 使用当前的计数器值作为训练起点
-        print(f'Steps per epoch: {self.steps_per_epoch}')
-        print(f'Training from epoch {self.counter} to {self.epoch}')
+        with tf.GradientTape() as tape:
+            output = self.unet(input_patch, training=True)
+            loss = self.loss_fn(target_patch, output, mask)
+            
+        # Get the gradients
+        gradient = tape.gradient(loss, self.unet.trainable_variables)
+        # Update the weights
+        self.optimizer.apply_gradients(zip(gradient, self.unet.trainable_variables))
 
-        idx_list = np.arange(num_samples)
-        total_iters = self.steps_per_epoch * (self.epoch - self.counter)
-        # data_generator = self.data_generator(idx_list, total_iters)
-        print('Loading training data...')
-        train_data = self.get_tf_dataset(self.training_paths, target_size=self.im_size,
-                                           batch_size=self.batch_size, shuffle=True,
-                                           slice_mode='all', model_mode='train')
-        # train_data = self.build_all_slice_dataset(self.training_paths, target_size=self.im_size,
-        #                                      batch_size=self.batch_size, shuffle=True, per_slice=True, mode='train')
-        print('Training data loaded successfully.')
-        tr_ls = []  # training loss history
-        early_stop_patience = 50
-        early_stop_delta = 0.01  # 1%
-        min_epoch = 150
-        early_stop_flag = False
-        ## load loss history
-        if self.resume == True:        
-            readmat = sio.loadmat('/mnt/newdisk/diffusion/code_zjy/project/diffusion/DDPM/zjy/DDPM/Loss/ddpm_unet.mat')
-            load_tr_ls = readmat['loss']
-            for i in range(self.counter):
-                tr_ls.append(load_tr_ls[0][i])
-            print('Finish loading loss!')
-        
-        ####################### train
-        if total_iters > 0:
-            print('Running on complete dataset with total training samples:', num_samples)
-            # 创建回调列表（移除 TensorBoard 回调，使用手动日志写入）
-            callbacks = [saver_callback]
-            # 模拟 fit() 的回调生命周期
-            # 1. on_train_begin
-            for callback in callbacks:
-                callback.on_train_begin()
-
-            print(f">>>>>>>>>>> 训练开始时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
-            start_time_all = time.time()  # 记录总训练时间
-
-            # 训练循环
-            for epoch in range(self.counter, self.epoch):
-                # 2. on_epoch_begin
-                for callback in callbacks:
-                    callback.on_epoch_begin(epoch)
-                # 重置指标
-                train_loss_metric = tf.keras.metrics.Mean()
-
-                iter_times = [] # 记录每个iteration的耗时
-                # 用tqdm进度条包裹batch循环
-                with tqdm(total=self.steps_per_epoch, ncols=100, desc=f"Epoch {epoch+1}", leave=False, disable=True) as pbar:
-                    for step_count, (input_batch, target_batch, _) in enumerate(train_data):
-                        start_time = time.time()  # 记录开始时间
-                        if step_count >= self.steps_per_epoch:
-                            break
-                        # 3. on_batch_begin
-                        for callback in callbacks:
-                            callback.on_batch_begin(step_count)
-                        
-                        # 执行训练步骤
-                        # print('input_batch shape:', input_batch.shape,'target_batch shape:', target_batch.shape, 'mask_batch shape:', mask_batch.shape)
-                        # (bs,256,256,1) (bs,256,256,1) (bs,256,256,1)
-                        step_loss = self._diffusion_train_step(input_batch, target_batch)
-
-                        # 更新指标
-                        train_loss_metric.update_state(step_loss)        
-                        # 获取当前学习率
-                        if hasattr(self.optimizer.learning_rate, '__call__'):
-                            current_step = epoch * self.steps_per_epoch + step_count
-                            current_lr = float(self.optimizer.learning_rate(current_step))
-                        else:
-                            current_lr = float(self.optimizer.learning_rate)
-                        # 准备批次日志
-                        batch_logs = {
-                            'loss': float(step_loss),
-                            'lr': current_lr
-                        }
-                        # 4. on_batch_end
-                        for callback in callbacks:
-                            callback.on_batch_end(step_count, batch_logs)
-                        # tqdm动态显示loss/lr
-                        pbar.set_postfix({
-                            'loss': f"{train_loss_metric.result().numpy():.4f}",
-                            'lr': f"{current_lr:.2e}"
-                        })
-                        pbar.update(1)
-
-                        iter_time = time.time() - start_time  # 计算本次iteration耗时
-                        iter_times.append(iter_time)  # 记录
-                # epoch 总耗时
-                if iter_times:
-                    avg_iter_time = sum(iter_times) / len(iter_times)
-                # Epoch 结束处理
-                epoch_loss = train_loss_metric.result()              
-                # 准备 epoch 日志
-                epoch_logs = {
-                    'loss': float(epoch_loss),
-                    'lr': current_lr
-                }
-                # TensorBoard 日志由 DiffusionModelSaver 回调统一管理
-                print(f"Epoch {epoch + 1}/{self.epoch} - Loss: {epoch_loss:.6f}, LR: {current_lr:.8f}, avg_iter_time: {avg_iter_time:.4f}s")
-
-                # 5. on_epoch_end：log & valid & save
-                for callback in callbacks:
-                    callback.on_epoch_end(epoch, epoch_logs)
-
-                # save loss history
-                tr_ls.append(epoch_loss)
-                sio.savemat('/mnt/newdisk/diffusion/code_zjy/project/diffusion/DDPM/zjy/DDPM/Loss/' + 'ddpm_unet.mat', {'loss': tr_ls})
-
-                # 保存最新模型（每个epoch覆盖一次）
-                self.unet.save(os.path.join(self.checkpoint_dir, self.model_dir, 'model_latest.h5'))
-
-                # Early stopping
-                if epoch+1 >= min_epoch and len(tr_ls) >= early_stop_patience+1:
-                    avg_recent = sum(tr_ls[-early_stop_patience-1:-1]) / early_stop_patience
-                    if tr_ls[-1] >= avg_recent * (1 - early_stop_delta):
-                        print(f"Early stopping at epoch {epoch+1}: loss did not decrease by 1% relative to previous 50 epochs average.")
-                        early_stop_flag = True
-
-                if early_stop_flag == True:
-                    break
-                
-                # 重置度量
-                train_loss_metric.reset_states()
-
-            # 6. on_train_end
-            for callback in callbacks:
-                callback.on_train_end()
-
-            # TensorBoard writer 由回调管理，无需手动关闭
-
-            self.save(epoch+1, max_to_keep=5)  # 保存最后一个 epoch 的检查点，=model_latest，但id包含epoch易读取
-
-            # 记录训练结束时间
-            end_time_all = time.time()
-            print(f">>>>>>>>>>> 训练结束时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time_all))} <<<<<<<<<<<<")
-            print(f"训练总时长: {(end_time_all - start_time_all)/60:.2f} 分钟")
-  
-        print("训练完成!")
+        return {'loss': loss}
     
     @tf.function
-    def _diffusion_train_step(self, input_batch, target_batch):    # 有的loss用mask计算，这里不确定要不要
-        """单个训练步骤"""
-        with tf.GradientTape() as tape:
-            loss = self.diffusion_trainer.forward(x_0=target_batch, context=input_batch)
-            loss = tf.reduce_mean(loss)
-        
-        # 计算梯度并更新模型
-        gradients = tape.gradient(loss, self.unet.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.unet.trainable_variables))
-        
-        return loss
+    def predict_step(self, data):
+        # patch  ##NOTE: in tf>=2.3.0, images=data; in tf==2.2.0, images=data[0]
+        if isinstance(data, tuple):
+            images = data[0]
+        else:
+            images = data
+
+        outputs = self(images, training=False)
+        outputs_count = 1
+
+        tta = getattr(self,'tta', {})
+        nrotation = getattr(tta, 'nrotation', 0)
+        if nrotation > 0:
+            for rot in range(nrotation):
+                radian = rot * 3.14159265359 * 2 / nrotation
+                images_rot = tfa.image.rotate(images, radian)
+                outputs_rot = self(images_rot, training=False)
+                outputs_rot = tfa.image.rotate(outputs_rot, -radian)
+                outputs += outputs_rot
+                outputs_count += 1
+
+        mirror_config = getattr(self, 'mirror_config', {})
+        if mirror_config.get('testing_mirror', False):
+            if mirror_config.get('rot90', False):
+                images_rot90 = tf.image.rot90(images)
+                outputs_rot90 = self(images_rot90, training=False)
+                outputs_rot90 = tf.image.rot90(outputs_rot90, -1)
+                outputs += outputs_rot90
+                outputs_count += 1
+            if self.mirror_config.get('mirror_all_dimensions'):
+                mirror_axes = [1, 2]
+            else:
+                mirror_axes = self.mirror_config.get('mirror_axes', [1, 2])
+            mirror_axes_comb = [[]]
+            for ax in mirror_axes:  # get powerset
+                mirror_axes_comb += [sub + [ax] for sub in mirror_axes_comb]
+            for axis in mirror_axes_comb[1:]:
+                images_mirror = tf.reverse(images, axis=axis)
+                outputs_mirror = self(images_mirror, training=False)
+                outputs_mirror = tf.reverse(outputs_mirror, axis=axis)
+                outputs += outputs_mirror
+                outputs_count += 1
+                if mirror_config.get('rot90', False):
+                    images_mirror_rot90 = tf.image.rot90(images_mirror)
+                    outputs_mirror_rot90 = self(images_mirror_rot90, training=False)
+                    outputs_mirror_rot90 = tf.image.rot90(outputs_mirror_rot90, -1)
+                    outputs_mirror_rot90 = tf.reverse(outputs_mirror_rot90, axis=axis)
+                    outputs += outputs_mirror_rot90
+                    outputs_count += 1
+
+        outputs = outputs / outputs_count
+        #outputs = tf.clip_by_value(images + outputs, 0., 1.)
+        return outputs
+
+    def test(self, testing_paths, output_path, **kwargs):
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+            
+        for input_file in testing_paths:
+            with h5py.File(input_file, 'r') as f_h5:
+                if 'input_images' in f_h5.keys():
+                    input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
+                else:
+                    continue
+            output_images = self.run_test(input_file)
+                
+            if output_path is not None:
+                with h5py.File(os.path.join(output_path, os.path.basename(input_file)), 'w') as f_h5:
+                    f_h5['output_images'] = output_images
     
-
-    # ############# 0725
-    def validate_diffusion(self, validation_paths):
-        val_dataset = self.get_tf_dataset(validation_paths, target_size=self.im_size, 
-                                          batch_size=self.batch_size, shuffle=False, 
-                                          model_mode='valid', slice_mode='all')
-        # 按 file_idx 分组收集所有 slice 的 pred 和 gt
-        pred_dict = {}
-        gt_dict = {}
-        for input_batch, target_batch, file_idx_batch in val_dataset:
-            # input_batch, target_batch: [bs, h, w, ch], file_idx_batch: [bs]
-            x_T = tf.random.normal(tf.shape(input_batch))
-            x_0 = self.diffusion_sampler.ddim_reverse(x_T, context=input_batch)  # [bs, h, w, ch]
-            pred_batch = x_0.numpy() if hasattr(x_0, 'numpy') else x_0
-            gt_batch = target_batch.numpy() if hasattr(target_batch, 'numpy') else target_batch
-            for i in range(input_batch.shape[0]):
-                idx = int(file_idx_batch[i].numpy()) if hasattr(file_idx_batch[i], 'numpy') else int(file_idx_batch[i])
-                pred_dict.setdefault(idx, []).append(pred_batch[i, ..., -1])  # 取最终预测
-                gt_dict.setdefault(idx, []).append(gt_batch[i, ..., -1])
-        # 计算每个case的3D MAE和SSIM
-        mae_list = []
-        ssim_list = []
-        for idx in pred_dict:
-            pred_stack = np.stack(pred_dict[idx], axis=0)  # [d, h, w]
-            gt_stack = np.stack(gt_dict[idx], axis=0)      # [d, h, w]
-            mae = np.mean(np.abs(gt_stack - pred_stack))
-            ssim_val = ssim(pred_stack, gt_stack, data_range=1.0, channel_axis=None)
-            mae_list.append(mae)
-            ssim_list.append(ssim_val)
-            print(f"Case {idx} - MAE: {mae:.4f}, SSIM: {ssim_val:.4f}")
-        mean_mae = np.mean(mae_list)
-        mean_ssim = np.mean(ssim_list)
-        return {'avg mae': mean_mae, 'avg ssim': mean_ssim}
-
-
+    def run_test(self, input_file):
+        all_images, info = self.read_testing_inputs(input_file)
+        all_probs = []
+        for n in range(all_images.shape[0]):
+            # Avoid memory leakage. 
+            # Converting the numpy array to a tensor maintains the same signature and avoids creating new graphs.
+            tensor_im = tf.convert_to_tensor(all_images[n : n + 1, ...], dtype=tf.float32)
+            all_probs.append(self.predict_on_batch(tensor_im))
+        output_labels = np.concatenate(all_probs, axis=0)
+        
+        full_size = info['full_size']
+        pad_size = info['pad_size']
+        pads = [pad_size[ax] - full_size[ax] for ax in range(len(full_size))]
+        output_labels = output_labels[:, pads[0] // 2 : pads[0] // 2 + full_size[0],
+                                      pads[1] // 2 : pads[1] // 2 + full_size[1], ...]
+        
+        if output_labels.shape[0] == 1:
+            output_labels = np.squeeze(output_labels, axis=0)
+        if output_labels.shape[-1] == 1:
+            output_labels = np.squeeze(output_labels, axis=-1)
+        return output_labels
+    
     class ModelSaver(tf.keras.callbacks.Callback):
         def __init__(self, saver_config, validation_config=None, custom_log_file=None):
             self.counter = 0
@@ -994,6 +744,219 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                             tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
                         self.test_writer.flush()
 
+
+
+
+
+
+
+ 
+
+    ############ 20250702
+    def diffusion_train(self, run_validation=False, validation_paths=None, resume=None, **kwargs):
+        """
+        完善的扩散模型训练方法，参考 DDPM_base_model_2d.train()
+        
+        Args:
+            run_validation: 是否运行验证
+            validation_paths: 验证集文件路径列表
+            resume: (已弃用) 现在通过初始化时的resume参数控制
+        """
+        if resume is not None:
+            print("[WARNING] The 'resume' parameter in diffusion_train() is deprecated. "
+                  "Please use the 'resume' parameter in model initialization instead.")
+        
+        print("开始扩散模型训练...")
+
+        # Compile model for training
+        self.compile_it()
+        
+        log_dir = os.path.join(self.log_dir, self.model_dir)
+        
+        # 不再手动创建 TensorBoard writer，统一使用回调管理
+        # train_log_dir = os.path.join(log_dir, 'train')
+        # train_writer = tf.summary.create_file_writer(train_log_dir)
+        
+        validation_config = None
+        if run_validation:
+            validation_config = {
+                'validation_paths': validation_paths,
+                'validation_fn': self.validate,
+                'log_dir': log_dir,
+            }
+        saver_config = {
+            'period': self.save_period,
+            'save_fn': self.save,
+            'log_dir': log_dir,
+        }
+        saver_callback = self.DiffusionModelSaver(saver_config=saver_config, validation_config=validation_config)
+        
+        # Prepare data generator
+        num_samples = len(self.training_paths)
+        if num_samples == 0:
+            print('No training data')
+            return
+        
+        # 使用当前的计数器值作为训练起点
+        print(f'Steps per epoch: {self.steps_per_epoch}')
+        print(f'Training from epoch {self.counter} to {self.epoch}')
+
+        idx_list = np.arange(num_samples)
+        total_iters = self.steps_per_epoch * (self.epoch - self.counter)
+        data_generator = self.data_generator(idx_list, total_iters)
+        
+        if total_iters > 0:
+            print('Running on complete dataset with total training samples:', num_samples)
+            
+            # 创建回调列表（移除 TensorBoard 回调，使用手动日志写入）
+            callbacks = [saver_callback]
+            
+            # 模拟 fit() 的回调生命周期
+            # 1. on_train_begin
+            for callback in callbacks:
+                callback.on_train_begin()
+            
+            # 训练循环
+            for epoch in range(self.counter, self.epoch):
+                print(f"\nEpoch {epoch + 1}/{self.epoch}")
+                
+                # 2. on_epoch_begin
+                for callback in callbacks:
+                    callback.on_epoch_begin(epoch)
+                
+                # 重置指标
+                train_loss_metric = tf.keras.metrics.Mean()
+                
+                # 进度条
+                progress_bar = tf.keras.utils.Progbar(
+                    target=self.steps_per_epoch, 
+                    stateful_metrics=['loss', 'lr']
+                )
+                
+                # 训练一个 epoch
+                step_count = 0
+                for input_batch, target_batch, mask_batch in data_generator:
+                    if step_count >= self.steps_per_epoch:
+                        break
+                    # 3. on_batch_begin
+                    for callback in callbacks:
+                        callback.on_batch_begin(step_count)
+                    
+
+                    # 执行训练步骤
+                    # print('input_batch shape:', input_batch.shape,'target_batch shape:', target_batch.shape, 'mask_batch shape:', mask_batch.shape)
+                    # (bs,256,256,1) (bs,256,256,1) (bs,256,256,1)
+                    step_loss = self._diffusion_train_step(input_batch, target_batch,mask_batch)
+
+                    # 更新指标
+                    train_loss_metric.update_state(step_loss)
+                    
+                    # 获取当前学习率
+                    if hasattr(self.optimizer.learning_rate, '__call__'):
+                        current_step = epoch * self.steps_per_epoch + step_count
+                        current_lr = float(self.optimizer.learning_rate(current_step))
+                    else:
+                        current_lr = float(self.optimizer.learning_rate)
+                    
+                    # 准备批次日志
+                    batch_logs = {
+                        'loss': float(step_loss),
+                        'lr': current_lr
+                    }
+                    
+                    # 4. on_batch_end
+                    for callback in callbacks:
+                        callback.on_batch_end(step_count, batch_logs)
+                    
+                    # 更新进度条
+                    progress_bar.update(
+                        current=step_count + 1,
+                        values=[
+                            ('loss', train_loss_metric.result().numpy()),
+                            ('lr', current_lr)
+                        ]
+                    )
+                    
+                    step_count += 1
+                
+                # Epoch 结束处理
+                epoch_loss = train_loss_metric.result()
+                
+                # 准备 epoch 日志
+                epoch_logs = {
+                    'loss': float(epoch_loss),
+                    'lr': current_lr
+                }
+                
+                # TensorBoard 日志由 DiffusionModelSaver 回调统一管理
+                print(f"Epoch {epoch + 1} - Loss: {epoch_loss:.6f}, LR: {current_lr:.8f}")
+                
+                # 5. on_epoch_end
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, epoch_logs)
+
+                # 重置度量
+                train_loss_metric.reset_states()
+            
+            # 6. on_train_end
+            for callback in callbacks:
+                callback.on_train_end()
+
+            # TensorBoard writer 由回调管理，无需手动关闭
+
+            self.save(self.epoch, max_to_keep=3)  # 保存最后一个 epoch 的检查点
+        
+        print("训练完成!")
+    
+    @tf.function
+    def _diffusion_train_step(self, input_batch, target_batch,mask_batch):    # 有的loss用mask计算，这里不确定要不要
+        """单个训练步骤"""
+        with tf.GradientTape() as tape:
+            loss = self.diffusion_trainer.forward(x_0=target_batch, context=input_batch)
+            loss = tf.reduce_mean(loss)
+        
+        # 计算梯度并更新模型
+        gradients = tape.gradient(loss, self.unet.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.unet.trainable_variables))
+        
+        return loss
+    
+
+    # ############# 还没修改
+    # def validate_diffusion(self, validation_paths):
+    #     """
+    #     扩散模型验证方法
+    #     """
+    #     if not validation_paths:
+    #         return {'mae': 0.0, 'mse': 0.0}
+        
+    #     print("Running validation...")
+    #     val_losses = []
+        
+    #     for val_path in validation_paths[:min(10, len(validation_paths))]:  # 限制验证样本数量
+    #         try:
+    #             # 生成验证样本
+    #             with h5py.File(val_path, 'r') as f_h5:
+    #                 cbct = np.asarray(f_h5['input_images'], dtype=np.float32)
+    #                 ct = np.asarray(f_h5['output_images'], dtype=np.float32)
+                
+    #             # 添加批次和通道维度
+    #             cbct = tf.expand_dims(tf.expand_dims(cbct, 0), -1)
+    #             ct = tf.expand_dims(tf.expand_dims(ct, 0), -1)
+                
+    #             # 计算验证损失
+    #             val_loss = self.diffusion_trainer.forward(x_0=ct, context=cbct)
+    #             val_losses.append(float(tf.reduce_mean(val_loss)))
+                
+    #         except Exception as e:
+    #             print(f"Validation error for {val_path}: {str(e)}")
+    #             continue
+        
+    #     avg_val_loss = np.mean(val_losses) if val_losses else 0.0
+    #     print(f"Validation loss: {avg_val_loss:.6f}")
+        
+    #     return {'loss': avg_val_loss, 'mse': avg_val_loss}
+  
 
     class DiffusionModelSaver(ModelSaver):
         """
@@ -1080,27 +1043,28 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             self.logs = {}
             
             # 保存和验证
-            if (epoch + 1) % self.period == 0:    # 原来按counter（0,1,2...)保存
+            if self.counter % self.period == 0:
                 print(f"\nSaving checkpoint at epoch {epoch + 1}...")
                 self.save(epoch + 1, max_to_keep=3)  # 保留3个最新模型
+                
+                # 运行验证（如果配置了）
+                if self.validation_config is not None:
+                    print("Running validation...")
+                    try:
+                        val_scores = self.validation_fn(self.validation_paths)    
+                        
+                        # 记录验证结果到 TensorBoard
+                        if hasattr(self, 'test_writer') and self.test_writer is not None:
+                            with self.test_writer.as_default():
+                                for metric in val_scores:
+                                    tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
+                                self.test_writer.flush()
+                        
+                        print(f"Validation results: {val_scores}")
+                    except Exception as e:
+                        print(f"Validation failed: {str(e)}")
+                
                 print(f"Checkpoint saved at epoch {epoch + 1}")
-
-            # 每20个epoch进行一次val
-            if (epoch + 1) % 20 == 0:
-              if self.validation_config is not None:
-                  # print("Running validation...")
-                  try:
-                      val_scores = self.validation_fn(self.validation_paths)    
-                      # 记录验证结果到 TensorBoard
-                      if hasattr(self, 'test_writer') and self.test_writer is not None:
-                          with self.test_writer.as_default():
-                              for metric in val_scores:
-                                  tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
-                              self.test_writer.flush()
-                          print(f"Validation results: {val_scores}")
-                  except Exception as e:
-                      print(f"Validation failed: {str(e)}")
-              
         
         def on_train_end(self, logs=None):
             """训练结束时的处理，关闭 TensorBoard writers"""
@@ -1111,154 +1075,191 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 self.test_writer.close()
             print("TensorBoard writers closed.")
     
-    ########### 0724 
-    def diffusion_test_batch(self, testing_paths, output_path, batch_size=4, sampler='ddpm', **kwargs):
-        """
-        批量推理的diffusion test，仿照PyTorch test.py实现：
-        - 支持batch推理
-        - 结果保存为hdf5
-        - 计算MAE/SSIM
-        - 可选保存部分样本可视化
-        """
-        # 确保每次test结果一致
-        np.random.seed(42)
-        tf.random.set_seed(42)
-
-        print("开始批量扩散模型测试...")
+    ################# 20250702 test: reverse sampling
+    def diffusion_test(self, testing_paths, output_path, squeue=None, all_slice=False, **kwargs):
+        # 加载模型
+        print("开始扩散模型测试...")
         _loaded, self.counter = self.load()
-        if _loaded:   # 重新加载模型后，需要重建sampler，否则默认用的是初始化的unet(除非test时也设置resume)
-            self.diffusion_sampler = GaussianDiffusionSampler(
-                model=self.unet,
-                beta_1=self.beta_1,
-                beta_T=self.beta_T,
-                T=self.max_timesteps,
-                infer_T=self.infer_T,
-                squeue=self.squeue
-            )
+        if _loaded:
+          self.diffusion_sampler = GaussianDiffusionSampler(
+              model=self.unet,
+              beta_1=self.beta_1,
+              beta_T=self.beta_T,
+              T=self.max_timesteps,
+              squeue=squeue,
+              #infer_T=1000
+          )
         else:
             raise ValueError("model load failed.")
 
-        # 创建输出目录
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
+        self.mae = []
+        self.ssim_val = []
 
-        print("Loading testing data...")
-        # 创建测试集dataset
-        test_dataset = self.get_tf_dataset(testing_paths, target_size=self.im_size, 
-                                           batch_size=batch_size, shuffle=False, 
-                                           model_mode='test', slice_mode='all')
-        # test_dataset = self.build_all_slice_dataset(testing_paths, target_size=self.im_size,
-        #                                              batch_size=batch_size, shuffle=False, per_slice=True)
-        num_slices = 0
-        for file in testing_paths:
-            with h5py.File(file, 'r') as f:
-                num_slices += f['input_images'].shape[0]
-        print(f'Test slices: {num_slices}')
+        for i, input_file in enumerate(testing_paths):
+            if i == 50:  # 限制测试样本数量
+                print("已处理50个样本，停止测试。")
+                break
+            ## 设置输出路径
+            with h5py.File(input_file, 'r') as f_h5:
+                if 'input_images' in f_h5.keys():
+                    # input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
+                    # print('original input:',input_images.shape)##
+                    filename = os.path.splitext(os.path.basename(input_file))[0]   # 文件名
+                    if output_path is not None:
+                        save_path = os.path.join(output_path, filename)
+                        os.makedirs(save_path, exist_ok=True)
+                    else:
+                        save_path = None
+                else:
+                    continue
 
-        if self.squeue is None:
-            save_steps = 1
-        else:
-            save_steps = self.infer_T // self.squeue + 1  # 1000 // 250 + 1 = 5
-        save_steps = getattr(self, 'save_steps', save_steps)  # 可根据实际采样步数调整
-        # # output save file
-        # save_h5_path = os.path.join(output_path, f"result_epoch_{self.counter}.hdf5")
-        # f = h5py.File(save_h5_path, 'w')
-        # output = f.create_dataset('out', shape=(num_slices, self.im_size[0], self.im_size[1], save_steps), dtype='float32')
-        # lr = f.create_dataset('lr', shape=(num_slices, self.im_size[0], self.im_size[1]), dtype='float32')
-        # hr = f.create_dataset('hr', shape=(num_slices, self.im_size[0], self.im_size[1]), dtype='float32')
-        # print(f"Results will be saved to {save_h5_path}")
+            print(f'>>> Sample_{i+1}_{filename} start ...')
 
-        sampling_times = []
+            ################################# predict ######################################
+            # load data
+            generated, all_targets = self.diffusion_run_test(input_file, squeue=squeue, save_path=save_path, all_slice=all_slice) # [d, h, w, save_steps], [d, h, w, c=1]
+            
+            if all_slice==True:
+              final_gen = generated[..., -1]  # 取最后一个生成的结果 [num_slices, h, w]
+              # 逐slice计算
+              slice_mae = []
+              slice_ssim = []
+              for sli in range(final_gen.shape[0]):
+                gen_slice = final_gen[sli]  # [h, w]
+                target_slice = all_targets[sli] # [h, w]
+                # 保证都是2D
+                if gen_slice.ndim !=2 or target_slice.ndim != 2:
+                  raise ValueError(f"Generated slice or target slice is not 2D: gen_slice shape {gen_slice.shape}, target_slice shape {target_slice.shape}")
+                gen_slice_np = gen_slice.numpy() if isinstance(gen_slice, tf.Tensor) else gen_slice
+                target_slice_np = target_slice.numpy() if isinstance(target_slice, tf.Tensor) else target_slice
+                mae = np.mean(np.abs(gen_slice_np - target_slice_np))
+                # skimage ssim 需要指定data_range
+                ssim_val = ssim(gen_slice_np, target_slice_np, data_range=2)
+                slice_mae.append(mae)
+                slice_ssim.append(ssim_val)
 
+              mean_mae = np.mean(slice_mae)
+              mean_ssim = np.mean(slice_ssim)
+              print(f"Sample {i+1}_{filename} - Mean MAE: {mean_mae}, Mean SSIM: {mean_ssim}")
+              self.mae.append(mean_mae)
+              self.ssim_val.append(mean_ssim)
+
+            else:
+              final_gen = generated[0, ..., -1]  # 取最后一个生成的结果 # [h, w]
+              ## 计算 MAE 和 SSIM
+              final_gen_np = final_gen.numpy() if isinstance(final_gen, tf.Tensor) else final_gen
+              all_targets_np = all_targets.numpy() if isinstance(all_targets, tf.Tensor) else all_targets
+              mae = np.mean(np.abs(final_gen_np - all_targets_np))
+              ssim_val = ssim(final_gen_np, all_targets_np, data_range=2)
+              print(f"MAE: {mae}, SSIM: {ssim_val}")
+              self.mae.append(mae)
+              self.ssim_val.append(ssim_val)               
+
+            print(f'--------- Sample_{i+1}_{filename} saved!! ----------------')
+
+        mae_mean = np.mean(self.mae)
+        ssim_mean = np.mean(self.ssim_val)
+        print(f"Average MAE: {mae_mean}, Average SSIM: {ssim_mean}")
         
-        print(f">>>>>>>>>>> 测试开始时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
-        print('Start batch sampling...')
-        pred_dict = {}
-        gt_dict = {}
-        input_dict = {}
+        return generated  # [num_slices/1, h, w, save_steps]
 
-        for batch_idx, (input_batch, target_batch, file_idx_batch) in enumerate(tqdm(test_dataset, desc='BatchTest', ncols=100, disable=True)):
-            start_time = time.time()
-            # input_batch, target_batch: [bs, h, w, c]
-            bs = input_batch.shape[0]   # 由于最后一个batch size可能小于4，所以额外定义bs
-            # 采样
-            x_T = tf.random.normal(tf.shape(input_batch))
-            if sampler=='ddim':
-                x_0 = self.diffusion_sampler.ddim_reverse(x_T, context=input_batch)  # [bs, h, w, save_steps]
-            elif sampler=='ddpm':
-                x_0 = self.diffusion_sampler.reverse(x_T, context=input_batch)  # [bs, h, w, save_steps]
+    def diffusion_run_test(self, input_file, squeue, save_path=None, all_slice=False):
+      """
+      对输入文件的每个切片逐slice进行扩散采样预测，返回所有生成结果和目标切片。
+      """
+      all_images, all_targets, info = self.read_testing_inputs(input_file)   # [d, h, w, channel],[d, h, w]
 
-            #print(x_0.shape, tf.reduce_min(x_0).numpy(), tf.reduce_max(x_0).numpy())
-            sampling_time = time.time() - start_time
-            sampling_times.append(sampling_time)
+      if all_slice==True: # 逐slice预测
+        num_slices = all_images.shape[0] # d
+        # print('num_slices:', num_slices)
+        generated_list = []
+        for sli in range(num_slices):
+          print(f'Processing slice {sli + 1}/{num_slices}...')
+          context_sli = all_images[sli]  # [h, w, channel]
+          context_sli = np.expand_dims(context_sli, axis=0)  # 加 batch 维度，[1, h, w, channel]
+          gen = self._diffusion_sample_step(context=context_sli, squeue=squeue, save_path=save_path)  # [1, h, w, save_steps]
 
-            # 可视化前3个batch的第1个slice
-            if batch_idx < 3:
-                fig, axes = plt.subplots(1, save_steps+2, figsize=(3*(save_steps+2), 3))
-                axes[0].imshow(input_batch[0,...,0], cmap='gray', vmin=-1, vmax=1)
-                axes[0].set_title('Input')
-                for k in range(save_steps):
-                    axes[k+1].imshow(x_0[0,...,k], cmap='gray', vmin=-1, vmax=1)
-                    axes[k+1].set_title(f'x0_{k}')
-                axes[-1].imshow(target_batch[0,...,0], cmap='gray', vmin=-1, vmax=1)
-                axes[-1].set_title('Target')
-                for ax in axes: ax.axis('off')
-                plt.tight_layout()
-                plt.savefig(os.path.join(output_path, f'sample_{batch_idx+1}.png'))
-                plt.close(fig)
+          # 恢复尺寸
+          full_size = info['full_size']
+          pad_size = info['pad_size']
+          pads = [pad_size[ax] - full_size[ax] for ax in range(len(full_size))]
+          gen = gen[:, pads[0] // 2 : pads[0] // 2 + full_size[0],
+                pads[1] // 2 : pads[1] // 2 + full_size[1], ...]  # [1, h, w, save_steps]
+          generated_list.append(gen)
 
-            pred_batch = x_0.numpy() if hasattr(x_0, 'numpy') else x_0
-            gt_batch = target_batch.numpy() if hasattr(target_batch, 'numpy') else target_batch
-            input_batch = input_batch.numpy() if hasattr(input_batch, 'numpy') else input_batch
-
-            for i in range(bs):
-                idx = int(file_idx_batch[i].numpy()) if hasattr(file_idx_batch[i], 'numpy') else file_idx_batch[i]
-                pred_dict.setdefault(idx, []).append(pred_batch[i,...,-1])
-                gt_dict.setdefault(idx, []).append(gt_batch[i,...,-1])
-                input_dict.setdefault(idx, []).append(input_batch[i,...,-1])
-
-            print(f'Batch {batch_idx+1}, sampling time: {sampling_time:.4f} s')
-
-            # # # 计算每个case的metrics
-            # for idx in pred_dict:
-            #     pred_stack = np.stack(pred_dict[idx], axis=0)  # [d,h,w]
-            #     gt_stack = np.stack(gt_dict[idx], axis=0)
-            #     input_stack = np.stack(input_dict[idx], axis=0)
-                #print('idx:', idx, 'pred_stack:', pred_stack.shape, 'gt_stack:', gt_stack.shape, 'input_stack:', input_stack.shape)
+        # 整合结果
+        generated = np.concatenate(generated_list, axis=0)  # [num_slices(d), h, w, save_steps]
+        # check shape
+        if generated[...,-1].shape != all_targets.shape:  # [d,h,w]
+          print('Warning: generated and target shapes do not match!')
 
 
-        #     # 保存hdf
-        #     for i in range(bs):
-        #         for k in range(save_steps):   # save_steps == x_0.shape[-1]
-        #             img = x_0[i,...,k].numpy() if hasattr(x_0[i,...,k], 'numpy') else x_0[i,...,k]
-        #             output[count+i,:, :, k] = img
-        #         lr[count+i,:,:] = input_batch[i,...,0].numpy() if hasattr(input_batch[i,...,0], 'numpy') else input_batch[i,...,0]
-        #         hr[count+i,:,:] = target_batch[i,...,0].numpy() if hasattr(target_batch[i,...,0], 'numpy') else target_batch[i,...,0]
-        #     count += bs
-        # f.close()
+      else: # 只预测1个slice
+        print('Processing middle slice...')
+        all_images_2d = all_images[all_images.shape[0] // 2, ...]  # 取中间切片
+        all_targets_2d = all_targets[all_targets.shape[0] // 2, ...]  # 取中间切片  # [h,w]
+        all_images_2d = np.expand_dims(all_images_2d, axis=0)  # 添加 batch 维度=1
+        generated = self._diffusion_sample_step(context=all_images_2d, squeue=squeue, save_path=save_path) # [1, h', w', save_steps]
+
+        full_size = info['full_size']
+        pad_size = info['pad_size']
+        pads = [pad_size[ax] - full_size[ax] for ax in range(len(full_size))]
+        generated = generated[:, pads[0] // 2 : pads[0] // 2 + full_size[0],      # 恢复尺寸
+                                      pads[1] // 2 : pads[1] // 2 + full_size[1], ...]
+        
+        if generated[0, ..., -1].shape != all_targets_2d.shape: # [h,w]
+            print('Warning: generated and target shapes do not match!')
+        all_targets = all_targets_2d
 
 
-        if sampling_times:
-            average_sampling_time = sum(sampling_times) / len(sampling_times)
-            print(f"Average sampling time: {average_sampling_time:.4f} s")
-
-        print('Finish batch sampling!!')
-        print(f">>>>>>>>>>> 测试结束时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
+      return generated, all_targets   # [d/1, h, w, save_steps], [d/None, h, w]
 
 
-        ## 存入hdf5
-        case_ids = sorted(pred_dict.keys())
-        save_dir = os.path.join(output_path, f"result_epoch_{self.counter}")
-        os.makedirs(save_dir, exist_ok=True)
-        for idx in case_ids:
-            pred_stack = np.stack(pred_dict[idx], axis=0)  # [d,h,w]
-            gt_stack = np.stack(gt_dict[idx], axis=0)
-            input_stack = np.stack(input_dict[idx], axis=0)
-            print(f"Case {idx}: pred_stack.shape={pred_stack.shape}, gt_stack.shape={gt_stack.shape}, input_stack.shape={input_stack.shape}")
+    ############# 扩散采样步骤
+    def _diffusion_sample_step(self, context, squeue=None, save_path=None):
+        """ 单个扩散采样步骤
+        Args:
+            context: 条件输入(CBCT图像)
+            squeue: 保存中间结果的间隔步数
+            save_dir: 保存目录
+        """
+        # 生成样本
+        x_T = tf.random.normal(tf.shape(context))   # [batch_size, H, W, channels]
+        generated = self.diffusion_sampler.reverse(x_T, context=context)    
+        # print(f"Generated shape: {generated.shape}")
+        if save_path is not None:
+          # 保存结果
+          if squeue is not None:
+              # 保存中间结果
+              for step in range(generated.shape[-1]):   # [batch_size, W, D, save_steps]
+                plt.figure(figsize=(6, 6))
+                plt.imshow(generated[generated.shape[0]//2, ..., step], cmap='gray')
+                plt.axis('off')
+                # Special naming for last 4 steps
+                if step >= generated.shape[-1] - 4:
+                  remaining_steps = generated.shape[-1] - step - 1
+                  step_num = remaining_steps * 100 
+                  title = f'x_{step_num}'
+                  filename = f'x_{step_num}.png'
+                else:
+                  # Original naming for other steps
+                  step_num = self.max_timesteps-(step+1)*squeue
+                  title = f'x_{step_num}'
+                  filename = f'step_{step_num:04d}.png'
+                
+                plt.title(title)
+                plt.axis('off')
+                plt.savefig(os.path.join(save_path, filename))
+                plt.close()
+          else:
+              # 只保存最终结果
+              plt.figure(figsize=(6, 6))
+              plt.imshow(generated[generated.shape[0]//2, ..., -1], cmap='gray')
+              plt.title('x_0')
+              plt.axis('off')
+              plt.savefig(os.path.join(save_path, f'final_x0.png'))
+              plt.close()
+        
+        return generated
 
-            save_h5_path = os.path.join(save_dir, f"case_{idx}.hdf5")
-            with h5py.File(save_h5_path, 'w') as f:
-                f.create_dataset('output', data=pred_stack, dtype='float32')
-                f.create_dataset('input', data=input_stack, dtype='float32')
-                f.create_dataset('target', data=gt_stack, dtype='float32')
-            print(f"Saved results to {save_h5_path}")
+

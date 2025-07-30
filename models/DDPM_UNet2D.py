@@ -64,6 +64,8 @@ DEFAULT_MODEL_CONFIG = {
     'dropout': 0.1,  # dropout概率
     'beta_1': 1e-4,   # 起始 beta 值
     'beta_T': 0.02,   # 结束 beta 值
+    'infer_T': 1000,
+    'squeue': None
 }
 
 class DDPM_UNet2D(DDPMBaseModel2D):
@@ -158,6 +160,8 @@ class DDPM_UNet2D(DDPMBaseModel2D):
         self.dropout = model_config['dropout']  # dropout概率
         self.beta_1 = model_config['beta_1']
         self.beta_T = model_config['beta_T']
+        self.squeue = model_config['squeue']
+        self.infer_T = model_config['infer_T']
         # self.is_diffusion = model_config.get('is_diffusion', False)  # 是否使用扩散模型
         
         # 根据resume参数决定是否加载检查点
@@ -176,14 +180,23 @@ class DDPM_UNet2D(DDPMBaseModel2D):
 
         # 如果是DM，创建 trainer
         # if self.is_diffusion:
-        print(f'T={self.max_timesteps}')
+        print(f'T={self.max_timesteps}, infer_T={self.infer_T}')
         self.diffusion_trainer = GaussianDiffusionTrainer(
             model=self.unet,      # resume=True 时，unet 已经包含了训练好的权重；resume=False 时，unet 是新初始化的模型
             beta_1=self.beta_1,
             beta_T=self.beta_T,
             T=self.max_timesteps
         )
-        print("Diffusion trainer created successfully!!")
+        self.diffusion_sampler = GaussianDiffusionSampler(
+                model=self.unet,
+                beta_1=self.beta_1,
+                beta_T=self.beta_T,
+                T=self.max_timesteps,
+                infer_T=self.infer_T,
+                squeue=self.squeue,
+            )
+
+        print("Diffusion trainer & Sampler created successfully!!")
         
         # Log variables
         vars_log_path = os.path.join(self.log_dir, self.model_dir, 'vars.txt')
@@ -248,7 +261,8 @@ class DDPM_UNet2D(DDPMBaseModel2D):
 
     ####################### 构建模型 ########################
     def build_diffusion_model(self):
-        unet = build_diffusion_unet(        ## networks.py
+        unet = build_diffusion_unet(        ## networks_copy.py 简单unet
+        # unet = build_unet(      # networks.py 原unet
             im_size=self.im_size, 
             nclass=self.output_channels,
             strides_list=self.strides_list,
