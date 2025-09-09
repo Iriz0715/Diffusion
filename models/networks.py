@@ -6,13 +6,6 @@ from tensorflow_addons.layers import GroupNormalization
 from tensorflow.keras.initializers import GlorotUniform, Zeros, VarianceScaling
 
 def TimeEmbedding(x, embed_dim, scale=30., W=None):
-    """
-    x: [batch] int32 或 float32
-    embed_dim: 嵌入维度，偶数
-    scale: 权重缩放
-    W: 可选，固定的 shape=[embed_dim//2] 的向量，若为None则自动生成
-    返回: [batch, embed_dim]
-    """
     if W is None:
         W = tf.random.normal([embed_dim // 2], stddev=scale)
     W = tf.stop_gradient(W)
