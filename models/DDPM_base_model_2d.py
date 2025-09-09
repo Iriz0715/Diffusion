@@ -1,49 +1,14 @@
-import os, h5py, glob, re, shutil, multiprocessing
+import os, h5py, glob, re
 from tqdm import tqdm
 import numpy as np
 import tensorflow as tf
-import tensorflow_addons as tfa
-import csv, datetime
 import matplotlib.pyplot as plt 
-
-from augmentation import *
 from Diffusion import GaussianDiffusionTrainer, GaussianDiffusionSampler
-from dataset_tf import create_dataset
-
-AUGMENTATION_PARAMS = {
-    'selected_seg_channels': [0],
-    # elastic
-    "do_elastic": False,
-    'deformation_scale': (0, 0.25),
-    'p_eldef': 0.2,
-    # scale
-    'do_scaling': True,
-    'scale_range': (0.7, 1.4),
-    'independent_scale_factor_for_each_axis': False,
-    'p_independent_scale_per_axis': 1,
-    'p_scale': 0.2,
-    # rotate
-    'do_rotation': True,
-    'rotation_x': (-30. / 360 * 2. * np.pi, 30. / 360 * 2. * np.pi),  # axial
-    'rotation_y': (-30. / 360 * 2. * np.pi, 30. / 360 * 2. * np.pi),  # sagittal
-    'rotation_z': (-30. / 360 * 2. * np.pi, 30. / 360 * 2. * np.pi),  # coronal
-    'rotation_p_per_axis': 1,
-    'p_rot': 0.2,
-    # crop
-    'random_crop': False,
-    'random_crop_dist_to_border': 32,
-    # gamma
-    'do_gamma': True,
-    'gamma_retain_stats': True,
-    'gamma_range': (0.7, 1.5),
-    'p_gamma': 0.3,
-    # others
-    'border_mode_data': 'constant',
-}
-
+import time
+import scipy.io as sio
+from skimage.metrics import structural_similarity as ssim
 
 class DDPMBaseModel2D(tf.keras.models.Model):
-    # With this part, fit() can read our custom data generator
     def call(self, x):
         return self.unet(x)
 
@@ -52,21 +17,20 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
         ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, '*.h5')))
-        if len(ckpt_files) >= max_to_keep:    # 自动删除多余旧文件
+        if len(ckpt_files) >= max_to_keep:
             os.remove(ckpt_files[0])
-        
         self.unet.save(os.path.join(checkpoint_dir, 'model_epoch%06d.h5' % step))
-    
+
     def load(self):
         checkpoint_dir = os.path.join(self.checkpoint_dir, self.model_dir)
         if not os.path.exists(checkpoint_dir):
             print('No model is found, please train first')
             return False, 0
-        ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, '*.h5')))
+        ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, 'model_epoch*.h5')))
         if ckpt_files:
             ckpt_file = ckpt_files[-1]
             ckpt_name = os.path.basename(ckpt_file)
-            self.counter = int(re.findall(r'epoch\d+', ckpt_name)[0][5:])  #e.g. model_epoch600.h5
+            self.counter = int(re.findall(r'epoch\d+', ckpt_name)[0][5:])
             self.unet = tf.keras.models.load_model(ckpt_file, compile=False)
             print('Loaded model checkpoint:', os.path.basename(os.path.dirname(ckpt_file)), ckpt_name)
             return True, self.counter
@@ -74,74 +38,31 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             print('Failed to find a checkpoint')
             return False, 0
 
-    def perform_augmentation(self, images, patch_size):
-        AUGMENTATION_PARAMS.update(self.augmentation_params)
-        if self.mirror_config is not None and self.mirror_config.get('training_mirror', False) and self.mirror_config.get('rot90', False):
-            # Random rotate 0, 90, 180, 270
-            k_rot90 = np.random.randint(4)
-            images = np.rot90(images, k_rot90)
-        
-        if len(images.shape) == 3:
-            images_aug = np.expand_dims(np.transpose(images, (2, 0, 1)), axis=0)
-        else:
-            images_aug = np.expand_dims(images, axis=(0, 1))
-        
-        images_aug, _ = augment_spatial_2(images_aug, None, patch_size=patch_size, 
-                                          patch_center_dist_from_border=
-                                          AUGMENTATION_PARAMS.get('random_crop_dist_to_border'),
-                                          do_elastic_deform=AUGMENTATION_PARAMS.get('do_elastic'),
-                                          do_rotation=AUGMENTATION_PARAMS.get('do_rotation'),
-                                          angle_x=AUGMENTATION_PARAMS.get('rotation_x'),
-                                          angle_y=AUGMENTATION_PARAMS.get('rotation_y'),
-                                          angle_z=AUGMENTATION_PARAMS.get('rotation_z'),
-                                          p_rot_per_axis=AUGMENTATION_PARAMS.get('rotation_p_per_axis'),
-                                          do_scale=AUGMENTATION_PARAMS.get('do_scaling'),
-                                          scale=AUGMENTATION_PARAMS.get('scale_range'),
-                                          border_mode_data=AUGMENTATION_PARAMS.get('border_mode_data'),
-                                          border_cval_data=0, 
-                                          order_data=3,
-                                          border_mode_seg='constant', border_cval_seg=-1,
-                                          order_seg=1, random_crop=AUGMENTATION_PARAMS.get('random_crop'),
-                                          p_el_per_sample=AUGMENTATION_PARAMS.get('p_eldef'),
-                                          p_scale_per_sample=AUGMENTATION_PARAMS.get('p_scale'),
-                                          p_rot_per_sample=AUGMENTATION_PARAMS.get('p_rot'),
-                                          independent_scale_for_each_axis=
-                                          AUGMENTATION_PARAMS.get('independent_scale_factor_for_each_axis'))
-
-        images_aug = np.squeeze(images_aug, axis=0)
-        
-        if self.mirror_config is not None and self.mirror_config.get('training_mirror', False):
-            # Axes starts with batch from config
-            # e.g. [1, 2] in mirror_config -> [0, 1] in augment_mirroring
-            if self.mirror_config.get('mirror_all_dimensions'):
-                mirror_axes = [1, 2]
+    @staticmethod
+    def crop_pad2D(x, target_size, shift=[0, 0]):
+        'crop or zero-pad the 2D volume to the target size'
+        x = np.asarray(x)
+        small = 0
+        y = np.ones(target_size, dtype=np.float32) * small
+        current_size = x.shape
+        pad_size = [0, 0]
+        # print('current_size:',current_size)
+        # print('pad_size:',target_size)
+        for dim in range(2):
+            if current_size[dim] > target_size[dim]:
+                pad_size[dim] = 0
             else:
-                mirror_axes = self.mirror_config.get('mirror_axes', [1, 2])
-            mirror_axes = [ax - 1 for ax in mirror_axes]
-            images_aug, _ = augment_mirroring(images_aug, None, mirror_axes)
-        
-        # images_aug = augment_gaussian_noise(images_aug, p_per_sample=0.1)
-        # images_aug = augment_gaussian_blur(images_aug, (0.5, 1.), per_channel=True, p_per_sample=0.2, p_per_channel=0.5)
-        # images_aug = augment_brightness_multiplicative(images_aug, multiplier_range=(0.75, 1.25), p_per_sample=0.15)
-        # images_aug = augment_contrast(images_aug, p_per_sample=0.15)
-        # images_aug = augment_linear_downsampling_scipy(images_aug, zoom_range=(0.5, 1), per_channel=True,
-        #                                                p_per_channel=0.5,
-        #                                                order_downsample=0, order_upsample=3, p_per_sample=0.25,
-        #                                                ignore_axes=None)
-        # images_aug = augment_gamma(images_aug, AUGMENTATION_PARAMS.get('gamma_range'), invert_image=True, per_channel=True,
-        #                            retain_stats=AUGMENTATION_PARAMS.get('gamma_retain_stats'), p_per_sample=0.1)
+                pad_size[dim] = int(np.ceil((target_size[dim] - current_size[dim])/2.0))
+        # pad first
+        x1 = np.pad(x, [[pad_size[0], pad_size[0]], [pad_size[1], pad_size[1]]], 'constant', constant_values=small)
+        # crop on x1
+        start_pos = np.ceil((np.asarray(x1.shape) - np.asarray(target_size))/2.0)
+        start_pos = start_pos.astype(int)
+        y = x1[(shift[0]+start_pos[0]):(shift[0]+start_pos[0]+target_size[0]),
+              (shift[1]+start_pos[1]):(shift[1]+start_pos[1]+target_size[1])]
+        return y
 
-        # images_aug = augment_gamma(images_aug, AUGMENTATION_PARAMS.get('gamma_range'), invert_image=False, per_channel=True, 
-        #                            retain_stats=AUGMENTATION_PARAMS.get('gamma_retain_stats'),
-        #                            p_per_sample=AUGMENTATION_PARAMS['p_gamma'])
-        
-        if len(images.shape) == 3:
-            images_aug = np.transpose(images_aug, (1, 2, 0))
-        else:
-            images_aug = np.squeeze(images_aug, axis=0)
-        return images_aug
-    
-    def get_training_patch(self, images, full_size, im_size, enlarged_im_size, augmentation=True):
+    def get_training_patch(self, images, full_size, im_size, enlarged_im_size):
         full_size = list(full_size)
         # Pad
         pad = np.array(enlarged_im_size) + 1 - np.array(full_size)
@@ -165,24 +86,6 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             labels = np.ones(full_size)
         la = labels[x_offset : x_offset + x_range, y_offset : y_offset + y_range]
         
-        # Normalize images
-        if self.norm_config['norm']:
-            eps = 1e-7
-            if len(images.shape) == 3:
-                if self.norm_config['norm_channels'] == 'rgb_channels':
-                    rgb_mean = np.array(self.norm_config.get('norm_mean', [0.485, 0.456, 0.406]))
-                    rgb_std = np.array(self.norm_config.get('norm_std', [0.229, 0.224, 0.225]))
-                    images = (images - rgb_mean) / rgb_std
-                elif self.norm_config['norm_channels'] == 'all_channels':
-                    images = (images - np.mean(images, axis=(0, 1))) / np.clip(np.std(images, axis=(0, 1)), eps, None)
-                else:
-                    for channel in self.norm_config['norm_channels']:
-                        m = np.mean(images[..., channel])
-                        s = np.clip(np.std(images[..., channel]), eps, None)
-                        images[..., channel] = (images[..., channel] - m) / s
-            else:
-                images = (images - np.mean(images)) / np.clip(np.std(images), eps, None)
-        
         # Get sampling prob
         # Random sampling ? of the time and always choose fg the rest of the time
         if np.random.random() > self.fg_sampling_ratio:
@@ -201,164 +104,136 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         
         images_extracted = images[x_start : x_start + enlarged_im_size[0], y_start : y_start + enlarged_im_size[1], ...]
         
-        if augmentation:
-            images_extracted = self.perform_augmentation(images_extracted, enlarged_im_size)
+        # if augmentation:
+        #     images_extracted = self.perform_augmentation(images_extracted, enlarged_im_size)
 
         x_border_width = int((enlarged_im_size[0] - im_size[0]) / 2)
         y_border_width = int((enlarged_im_size[1] - im_size[1]) / 2)
 
         images_extracted = images_extracted[x_border_width : x_border_width + im_size[0], 
                                             y_border_width : y_border_width + im_size[1], ...]
-        
+
         return images_extracted
     
-    def mixup_two_arrays(self, array1, array2, num_holes_range=(1, 4), hole_height_range=(64, 128), hole_width_range=(64, 128)):
-        range1 = [np.amin(array1), np.amax(array1)]
-        range2 = [np.amin(array2), np.amax(array2)]
-        normed_array1 = (array1 - range1[0]) / (range1[1] - range1[0] + 1e-7)
-        normed_array2 = (array2 - range2[0]) / (range2[1] - range2[0] + 1e-7)
-        mixup_array = normed_array1
-        min_holes, max_holes = num_holes_range
-        min_height, max_height = hole_height_range
-        min_width, max_width = hole_width_range
-        holes = np.random.randint(min_holes, max_holes + 1)
-        height, width = mixup_array.shape[:2]
+    def read_training_inputs(self, file_path, target_size, patch):
+        file_path = file_path.numpy().decode('utf-8') if isinstance(file_path, bytes) or isinstance(file_path, np.bytes_) else file_path.numpy().decode()
+        file_name = os.path.splitext(os.path.basename(file_path))[0]
+        with h5py.File(file_path, 'r') as f_h5:
+            input_img = np.asarray(f_h5['input_images'], dtype=np.float32)
+            input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8) if 'input_images_mask' in f_h5.keys() else np.zeros_like(input_img, dtype=np.uint8)
+            output_img = np.asarray(f_h5['output_images'], dtype=np.float32)
+            output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8) if 'output_images_mask' in f_h5.keys() else np.zeros_like(output_img, dtype=np.uint8)
+            # input_img = input_img * 2. - 1.  ############ Scale to [-1, 1]
+            # output_img = output_img * 2. - 1. ############ Scale to [-1, 1]
+            full_size = input_img.shape[1:]
+            results = []
+            for i in range(input_img.shape[0]):
+              if patch==True: # 随机 patch
+                input_img_ch = np.expand_dims(input_img[i], axis=-1)
+                output_img_ch = np.expand_dims(output_img[i], axis=-1)
+                input_images_mask_ch = np.expand_dims(input_images_mask[i], axis=-1)
+                output_images_mask_ch = np.expand_dims(output_images_mask[i], axis=-1)
+                images = np.concatenate([input_img_ch, output_img_ch, input_images_mask_ch, output_images_mask_ch], axis=-1)
+                images_extracted = self.get_training_patch(images, full_size, im_size=target_size, enlarged_im_size=self.enlarged_im_size)
+                input_images_extracted = images_extracted[..., 0:1]
+                output_images_extracted = images_extracted[..., 1:2]
+                input_images_mask_extracted = (images_extracted[..., 2:3]> 0.5).astype(np.float32)
+                output_images_mask_extracted = (images_extracted[..., 3:4]> 0.5).astype(np.float32)
+                results.append((input_images_extracted, output_images_extracted, input_images_mask_extracted, output_images_mask_extracted, file_name.encode('utf-8')))
+              else: # center crop
+                input_img_crop = self.crop_pad2D(x=input_img[i], target_size=target_size)
+                output_img_crop = self.crop_pad2D(x=output_img[i], target_size=target_size)
+                input_images_mask_crop = self.crop_pad2D(x=input_images_mask[i], target_size=target_size)
+                output_images_mask_crop = self.crop_pad2D(x=output_images_mask[i], target_size=target_size)
+                input_img_crop = np.expand_dims(input_img_crop, axis=-1)
+                output_img_crop = np.expand_dims(output_img_crop, axis=-1)
+                input_images_mask_crop = np.expand_dims(input_images_mask_crop, axis=-1)
+                output_images_mask_crop = np.expand_dims(output_images_mask_crop, axis=-1)
+                results.append((input_img_crop, output_img_crop, input_images_mask_crop, output_images_mask_crop, file_name.encode('utf-8')))
+            arrs = list(zip(*results))
+            return (
+                np.stack(arrs[0], axis=0),
+                np.stack(arrs[1], axis=0),
+                np.stack(arrs[2], axis=0),
+                np.stack(arrs[3], axis=0),
+                np.array(arrs[4], dtype=np.bytes_)
+            )
 
-        for _ in range(holes):
-            hole_height = np.random.randint(min_height, max_height + 1)
-            hole_width = np.random.randint(min_width, max_width + 1)
+    def get_trainning_dataset(self, folder_path, target_size, patch=True, batch_size=8, shuffle=True):
+        all_files = []
+        # list or tuple
+        if isinstance(folder_path, (list, tuple)):
+            for single_folder in folder_path:
+                if isinstance(single_folder, (list, tuple)):
+                    for sub_folder in single_folder:
+                        all_files.extend(sorted(glob.glob(os.path.join(str(sub_folder)))))
+                else:
+                    all_files.extend(sorted(glob.glob(os.path.join(str(single_folder)))))
+        else:
+            # file folder
+            if os.path.isdir(folder_path):
+                all_files.extend(sorted(glob.glob(os.path.join(folder_path, "*.hdf5"))))
+            # hdf5 file
+            elif os.path.isfile(folder_path) and folder_path.endswith('.hdf5'):
+                all_files.append(folder_path)
 
-            y = np.random.randint(0, height - hole_height)
-            x = np.random.randint(0, width - hole_width)
+        files_ds = tf.data.Dataset.from_tensor_slices(all_files)
+        def map_fn(file_path):
+            elems = tf.py_function(
+                func=lambda f: self.read_training_inputs(f, target_size, patch),
+                inp=[file_path],
+                Tout=[tf.float32, tf.float32, tf.float32, tf.float32, tf.string],
+            )
+            input_img, output_img, input_mask, output_mask, file_name = elems
+            file_name = tf.reshape(file_name, [-1, 1])
+            return tf.data.Dataset.from_tensor_slices((input_img, output_img, input_mask, output_mask, file_name))
 
-            mixup_array[y:y + hole_height, x:x + hole_width] = normed_array2[y:y + hole_height, x:x + hole_width]
-        
-        mixup_array = mixup_array * (range1[1] - range1[0] + 1e-7) + range1[0]
-        return mixup_array
+        ds = files_ds.interleave(
+            map_fn,
+            cycle_length=8,
+            num_parallel_calls=tf.data.AUTOTUNE,
+            deterministic=False
+        )
+        if shuffle:
+            ds = ds.shuffle(buffer_size=1000)
+        ds = ds.batch(batch_size)
+        ds = ds.prefetch(tf.data.AUTOTUNE)
+        return ds
+
+    # crop background based on mask
+    @staticmethod
+    def get_bbox_from_mask(mask, threshold=0, margin=5):
+        # mask: [d, w, h]
+        full_size = mask.shape
+        pos = np.where(mask > threshold)
+        z_min, y_min, x_min = np.min(pos, axis=1)
+        z_max, y_max, x_max = np.max(pos, axis=1) + 1
+        z_min = max(z_min - margin, 0)
+        y_min = max(y_min - margin, 0)
+        x_min = max(x_min - margin, 0)
+        z_max = min(z_max + margin, mask.shape[0])
+        y_max = min(y_max + margin, mask.shape[1])
+        x_max = min(x_max + margin, mask.shape[2])
+        return (z_min, z_max, y_min, y_max, x_min, x_max),full_size
     
-    def read_training_inputs(self, file, im_size, enlarged_im_size, augmentation=True):
-        to_simulate = False
-        input_images = None
-        input_images_mask = None
-        output_images = None
-        output_images_mask = None
-        
-        with h5py.File(file, 'r') as f_h5:
-            if 'input_images' in f_h5.keys():
-                input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
-                if 'input_images_mask' in f_h5.keys():
-                    input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8)
-            
-            if 'output_images' in f_h5.keys():
-                output_images = np.asarray(f_h5['output_images'], dtype=np.float32)
-                if 'output_images_mask' in f_h5.keys():
-                    output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8)
-            
-            # Only have one, simulate input_images later
-            if input_images is None and output_images is not None:
-                input_images = np.copy(output_images)
-                to_simulate = True
-            elif output_images is None and input_images is not None:
-                output_images = np.copy(input_images)
-                to_simulate = True
-        
-        mask = None
-        if input_images_mask is not None and output_images_mask is not None:
-            # Use the pixels that the two are the same as the mask
-            mask = input_images_mask == output_images_mask
-        
-        # Our 2D image dim standard is [batch(always=1 / maybe missing), h, w, channel(maybe missing)]
-        # In training, we random choose one slice in batch, and drop batch dim
-        if len(input_images.shape) == 4:
-            full_size = list(input_images.shape)[1:-1]
-            sli = np.random.choice(input_images.shape[0])
-            input_images = input_images[sli]
-            output_images = output_images[sli]
-            if mask is not None:
-                mask = mask[sli]
-        elif len(input_images.shape) == 3:
-            if self.input_channels == input_images.shape[-1]:
-                full_size = list(input_images.shape)[:-1]
-            else:
-                full_size = list(input_images.shape[1:])
-                sli = np.random.choice(input_images.shape[0])
-                input_images = input_images[sli]
-                output_images = output_images[sli]
-                if mask is not None:
-                    mask = mask[sli]
-        elif len(input_images.shape) == 2:
-            full_size = list(input_images.shape)
-        
-        # Use output_images as input_images to avoid over-transform
-        if self.add_identity_sample:
-            if np.random.uniform() < self.identity_sampling_ratio:
-                input_images = np.copy(output_images)
-        
-        if self.augmentation_params.get('do_mixup', False):
-            p_mixup = self.augmentation_params.get('p_mixup', 0.0)
-            if np.random.uniform() < p_mixup:
-                input_images = self.mixup_two_arrays(
-                    input_images, output_images, 
-                    num_holes_range=(1, 4), 
-                    hole_height_range=(int(full_size[0] * 0.2), int(full_size[0] * 0.5)), 
-                    hole_width_range=(int(full_size[1] * 0.2), int(full_size[1] * 0.5))
-                )
-        
-        # Simulate input images if not exist
-        if to_simulate:
-            # mean: 0.0; std: 0.0~0.2
-            simulation_fn = lambda x: np.clip(x + np.random.normal(0.0, np.random.random() * 0.2, x.shape), 0, 1)
-            if self.simulation_config is not None:
-                simulation_fn = self.simulation_config.get('simulation_fn', simulation_fn)
-            input_images = simulation_fn(input_images)
-            # Noise2Noise
-            # output_images = simulation_fn(output_images)
-        
-        if mask is None:
-            # if pad or rotate out, the outside area will not be counted in
-            mask = np.ones(full_size, dtype=np.float32)
-        
-        # Adjust shape to uniform format (h, w, channel)
-        if len(input_images.shape) == 2:
-            input_images = input_images[..., None]
-        if len(output_images.shape) == 2:
-            output_images = output_images[..., None]
-        if len(mask.shape) == 2:
-            mask = mask[..., None]
-        images = np.concatenate([input_images, output_images, mask], axis=-1)
-        
-        images_extracted = self.get_training_patch(images, full_size, im_size, enlarged_im_size, augmentation=True)
-        input_images_extracted = images_extracted[..., 0 : self.input_channels//2]      # input_channels =2
-        output_images_extracted = images_extracted[..., self.input_channels//2 : self.input_channels//2 + self.output_channels]
-        mask = (images_extracted[..., self.input_channels + self.output_channels//2 : ] > 0.5).astype(np.float32)
-        
-        bin_weights = list(self.bin_weights)
-        for i in range(len(bin_weights)):
-            mask[(output_images_extracted >= i / len(bin_weights)) &
-                 (output_images_extracted < (i + 1) / len(bin_weights))] *= bin_weights[i]
-        if self.sampling_config is not None and 'threshold' in self.sampling_config:
-            mask[np.abs(output_images_extracted - input_images_extracted) > self.sampling_config['threshold']] = 0
-        
-        return input_images_extracted, output_images_extracted, mask.astype(np.float32)
+    @staticmethod
+    def crop_with_bbox(arr, bbox):
+        z_min, z_max, y_min, y_max, x_min, x_max = bbox
+        return arr[z_min:z_max, y_min:y_max, x_min:x_max]
     
-    def read_testing_inputs(self, file):
-        images = None
-        to_simulate = False
-        
-        with h5py.File(file, 'r') as f_h5:
-            if 'input_images' in f_h5.keys():
-                images = np.asarray(f_h5['input_images'], dtype=np.float32)
-            
-            if images is None and 'output_images' in f_h5.keys():
-                images = np.asarray(f_h5['output_images'], dtype=np.float32)
-                to_simulate = True
-        
-        if to_simulate:
-            simulation_fn = lambda x: np.clip(x + np.random.normal(0.0, np.random.random() * 0.2, x.shape), 0, 1)
-            if self.simulation_config is not None:
-                simulation_fn = self.simulation_config.get('simulation_fn', simulation_fn)
-            images = simulation_fn(images)
-        
+    # Restore to original size
+    @staticmethod
+    def restore_with_bbox(cropped, bbox, shape):
+        arr = np.zeros(shape, dtype=cropped.dtype)
+        z_min, z_max, y_min, y_max, x_min, x_max = bbox
+        arr[z_min:z_max, y_min:y_max, x_min:x_max] = cropped
+        return arr
+
+    # pad to multiples of layers
+    def read_testing_inputs(self, images):
+        #images = None
+        #targets = None
+
         # Our 2D image dim standard is [batch(always=1 / maybe missing), h, w, channel(maybe missing)]
         # In testing, we keep the batch dim
         if len(images.shape) == 4:
@@ -395,10 +270,12 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             'full_size': full_size,
             'pad_size': pad_size
         }
-        
+
         all_images = images.copy()
+        #all_targets = targets.copy()
         for sli in range(all_images.shape[0]):
             images = all_images[sli]
+            #targets = all_targets[sli]
             # Normalize images
             if self.norm_config['norm']:
                 eps = 1e-7
@@ -416,263 +293,181 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                             images[..., channel] = (images[..., channel] - m) / s
                 else:
                     images = (images - np.mean(images)) / np.clip(np.std(images), eps, None)
-            all_images[sli] = images
-        return all_images, info
-    
-    def train_data_mapper(self, i):
-        input_patch, target_patch, mask = self.read_training_inputs(
-            self.training_paths[i], self.im_size, self.enlarged_im_size)
-        return input_patch, target_patch, mask
-    
-    def process_data_batch(self, q, idx_list):
-        while True:
-            shuffle_list = np.random.permutation(idx_list)
-            input_batch = [None for _ in range(self.batch_size)]
-            target_batch = [None for _ in range(self.batch_size)]
-            mask_batch = [None for _ in range(self.batch_size)]
-            ib = 0
-            idx = 0
-            while ib < self.batch_size and idx < len(idx_list):
-                i = shuffle_list[idx]
-                idx += 1
-                input_batch[ib], target_batch[ib], mask_batch[ib] = self.train_data_mapper(i)
-                ib += 1
-            # Drop remainder
-            if ib < self.batch_size:
-                continue
-            input_batch = np.stack(input_batch, axis=0)
-            target_batch = np.stack(target_batch, axis=0)
-            mask_batch = np.stack(mask_batch, axis=0)
-            q.put((input_batch, target_batch, mask_batch))
+          
 
-    def data_generator(self, idx_list, total_iters):
-        q = multiprocessing.Queue(maxsize=self.num_threads * 8)
-        pool = multiprocessing.pool.ThreadPool(self.num_threads, initializer=self.process_data_batch, 
-                                               initargs=(q, idx_list))
-        it = 0
-        while it < total_iters:
-            try:
-                stuff = q.get()
-                if stuff is None:
-                    break
-                input_batch, target_batch, mask_batch = stuff
-                it += 1
-                yield input_batch, target_batch, mask_batch
-            except:
-                break
-        pool.close()
-    
-    def train(self, run_validation=False, validation_paths=None, **kwargs):
+            all_images[sli] = images
+            #all_targets[sli] = targets
+        return all_images, info    # [d, h, w, c], [d, h, w]
+
+
+    ''' >>>>>>>>>>>>>>>>>>> Train <<<<<<<<<<<<<<<<<<<<<<<<'''
+    def diffusion_train(self, run_validation=False, validation_paths=None, **kwargs):
+        print("Start Diffusion Training...")
         # Compile model for training
         self.compile_it()
-        
         log_dir = os.path.join(self.log_dir, self.model_dir)
-        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, profile_batch=0)
-        
         validation_config = None
         if run_validation:
             validation_config = {
                 'validation_paths': validation_paths,
-                'validation_fn': self.validate,
+                'validation_fn': self.validate_diffusion,
                 'log_dir': log_dir,
             }
         saver_config = {
             'period': self.save_period,
             'save_fn': self.save,
             'log_dir': log_dir,
+            'checkpoint_dir': self.checkpoint_dir,
+            'model_dir': self.model_dir,
         }
-        saver_callback = self.ModelSaver(saver_config=saver_config, validation_config=validation_config)
+        saver_callback = self.DiffusionModelSaver(saver_config=saver_config, 
+                                                  validation_config=validation_config, 
+                                                  unet=self.unet)
         
-        # Prepare data generator
-        num_samples = len(self.training_paths)
-        if num_samples == 0:
-            print('No training data')
-            return
-        idx_list = np.arange(num_samples)
+        print(f'Steps per epoch: {self.steps_per_epoch}')
+        print(f'Training from epoch {self.counter} to {self.epoch}')
         total_iters = self.steps_per_epoch * (self.epoch - self.counter)
-        data_generator = self.data_generator(idx_list, total_iters)
+
+        print('Loading training data...')
+        train_data = self.get_training_dataset(self.training_paths, target_size=self.im_size,
+                                           batch_size=self.batch_size, shuffle=True,
+                                           patch=True)
+        print('Training data loaded successfully!!')
+        num_samples = len(self.training_paths)
+        num_slices = 0
+        for file in self.training_paths:
+            with h5py.File(file, 'r') as f:
+                num_slices += f['input_images'].shape[0]
+        print('Running on complete dataset with total training samples:', num_samples)
+        print(f'Train slices: {num_slices}')
+
+        tr_ls = []
+        ## load loss history
+        if self.resume == True:        
+            readmat = sio.loadmat(log_dir + '/loss.mat')
+            load_tr_ls = readmat['loss']
+            for i in range(self.counter):
+                tr_ls.append(load_tr_ls[0][i])
+            print('Finish loading losses!')
         
+        ####################### train
         if total_iters > 0:
-            print('Running on complete dataset with total training samples:', num_samples)
-            self.fit(data_generator, validation_data=None, verbose=2,
-                     steps_per_epoch=self.steps_per_epoch, initial_epoch=self.counter, epochs=self.epoch,
-                     callbacks=[tensorboard_callback, saver_callback])
-        
-            self.save(self.epoch)
-        return
-    
-    def validate(self, validation_paths):
-        def keep_sli_helper(input_images):
-            keep_sli = []
-            for sli in range(input_images.shape[0]):
-                if len(np.unique(input_images[sli])) == 1:
-                    keep_sli.append(False)
-                else:
-                    keep_sli.append(True)
-            return keep_sli
-        def calculate_metric(a, b, metric, mask=None):
-            diff = a - b
-            if mask is None:
-                mask = np.ones(a.shape, dtype=np.bool)
-            if metric == 'sos':
-                sum_of_squares = (a - b) * (a - b)
-                res = np.sqrt(np.mean(sum_of_squares[mask]))
-            elif metric == 'mae':
-                res = np.mean(np.abs(diff)[mask])
-            elif metric == 'ssim':
-                from skimage.metrics import structural_similarity as ssim
-                res = ssim(a, b)
-            return res
-        mae_before = []
-        mae_after = []
-        ssim_before = []
-        ssim_after = []
-        pbar = tqdm(validation_paths)
-        for case in pbar:
-            output_images = self.run_test(case)
-            with h5py.File(case, 'r') as f_h5:
-                #input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
-                output_images = np.asarray(f_h5['output_images'], dtype=np.float32)
+            callbacks = [saver_callback]
 
-            # input_images = (input_images - input_images.min()) / (input_images.max() - input_images.min())
-            # output_images = np.clip(input_images + output_images, 0., 1.)
-            # keep_sli = keep_sli_helper(input_images)
-            # input_images = input_images[keep_sli]
-            # output_images = output_images[keep_sli]
-            mask = None
-            if self.sampling_config is not None and 'threshold' in self.sampling_config:
-                mask = np.abs(input_images - output_images) < self.sampling_config['threshold']
-            # mae_before.append(calculate_metric(input_images, output_images, 'mae', mask))
-            mae_after.append(calculate_metric(output_images, output_images, 'mae', mask))
-            # ssim_before.append(calculate_metric(input_images, output_images, 'ssim'))
-            ssim_after.append(calculate_metric(output_images, output_images, 'ssim'))
-            pbar.set_postfix({'val_scores': [np.mean(mae_after), np.mean(ssim_after)]})
-        return {'mae': np.mean(mae_after), 'ssim': np.mean(ssim_after)}
-    
-    # can be overwritten by inherited model
+            print(f">>>>>>>>>>> Start training: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
+            start_time_all = time.time()
+            for epoch in range(self.counter, self.epoch):
+                train_loss_metric = tf.keras.metrics.Mean()
+                iter_times = []
+                with tqdm(total=self.steps_per_epoch, ncols=100, desc=f"Epoch {epoch+1}", leave=False, disable=True) as pbar:
+                    for step_count, (input_batch, target_batch, _,_, _) in enumerate(train_data):
+                        start_time = time.time()
+                        if step_count >= self.steps_per_epoch:  # max training step for per epoch
+                            break
+
+                        ## diffusion model
+                        step_loss = self._diffusion_train_step(input_batch, target_batch, mask_batch=None)
+                        train_loss_metric.update_state(step_loss)     
+
+                        if hasattr(self.optimizer.learning_rate, '__call__'):
+                            current_step = epoch * self.steps_per_epoch + step_count
+                            current_lr = float(self.optimizer.learning_rate(current_step))
+                        else:
+                            current_lr = float(self.optimizer.learning_rate)
+                        batch_logs = {
+                            'loss': float(step_loss),
+                            'lr': current_lr
+                        }
+                        for callback in callbacks:
+                            callback.on_batch_end(step_count, batch_logs)
+                        pbar.set_postfix({
+                            'loss': f"{train_loss_metric.result().numpy():.4f}",
+                            'lr': f"{current_lr:.2e}"
+                        })
+                        pbar.update(1)
+                        iter_time = time.time() - start_time
+                        iter_times.append(iter_time)
+
+                # Epoch loss
+                epoch_loss = train_loss_metric.result()              
+                epoch_logs = {
+                    'loss': float(epoch_loss),
+                    'lr': current_lr
+                }
+                # log & valid & save
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, epoch_logs)
+
+                # save loss history
+                tr_ls.append(epoch_loss)
+                sio.savemat(log_dir + '/loss.mat', {'loss': tr_ls})
+                # save latest model
+                self.unet.save(os.path.join(self.checkpoint_dir, self.model_dir, 'model_latest.h5'))
+                if iter_times:
+                   avg_iter_time = sum(iter_times) / len(iter_times)
+                print(f"Epoch {epoch + 1}/{self.epoch} - Loss: {epoch_loss:.6f}, LR: {current_lr:.8f}, avg_iter_time: {avg_iter_time:.4f}s")
+
+                train_loss_metric.reset_states()
+
+            for callback in callbacks:
+                callback.on_train_end()
+
+            self.save(epoch+1, max_to_keep=10)  # save last checkpoint = model_latest
+
+            # training time
+            end_time_all = time.time()
+            print(f">>>>>>>>>>> Finish training: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time_all))} <<<<<<<<<<<<")
+            print(f"Training time: {(end_time_all - start_time_all)/60:.2f} min")
+
     @tf.function
-    def train_step(self, data):
-        input_patch, target_patch, mask = data
-        
+    def _diffusion_train_step(self, input_batch, target_batch, mask_batch):
         with tf.GradientTape() as tape:
-            output = self.unet(input_patch, training=True)
-            loss = self.loss_fn(target_patch, output, mask)
-            
-        # Get the gradients
-        gradient = tape.gradient(loss, self.unet.trainable_variables)
-        # Update the weights
-        self.optimizer.apply_gradients(zip(gradient, self.unet.trainable_variables))
-
-        return {'loss': loss}
-    
-    @tf.function
-    def predict_step(self, data):
-        # patch  ##NOTE: in tf>=2.3.0, images=data; in tf==2.2.0, images=data[0]
-        if isinstance(data, tuple):
-            images = data[0]
-        else:
-            images = data
-
-        outputs = self(images, training=False)
-        outputs_count = 1
-
-        tta = getattr(self,'tta', {})
-        nrotation = getattr(tta, 'nrotation', 0)
-        if nrotation > 0:
-            for rot in range(nrotation):
-                radian = rot * 3.14159265359 * 2 / nrotation
-                images_rot = tfa.image.rotate(images, radian)
-                outputs_rot = self(images_rot, training=False)
-                outputs_rot = tfa.image.rotate(outputs_rot, -radian)
-                outputs += outputs_rot
-                outputs_count += 1
-
-        mirror_config = getattr(self, 'mirror_config', {})
-        if mirror_config.get('testing_mirror', False):
-            if mirror_config.get('rot90', False):
-                images_rot90 = tf.image.rot90(images)
-                outputs_rot90 = self(images_rot90, training=False)
-                outputs_rot90 = tf.image.rot90(outputs_rot90, -1)
-                outputs += outputs_rot90
-                outputs_count += 1
-            if self.mirror_config.get('mirror_all_dimensions'):
-                mirror_axes = [1, 2]
+            loss = self.diffusion_trainer.forward(x_0=target_batch, context=input_batch)
+            if mask_batch is not None:
+                loss = tf.reduce_sum(tf.multiply(loss, mask_batch[...,0])) / tf.reduce_sum(mask_batch[...,0])
             else:
-                mirror_axes = self.mirror_config.get('mirror_axes', [1, 2])
-            mirror_axes_comb = [[]]
-            for ax in mirror_axes:  # get powerset
-                mirror_axes_comb += [sub + [ax] for sub in mirror_axes_comb]
-            for axis in mirror_axes_comb[1:]:
-                images_mirror = tf.reverse(images, axis=axis)
-                outputs_mirror = self(images_mirror, training=False)
-                outputs_mirror = tf.reverse(outputs_mirror, axis=axis)
-                outputs += outputs_mirror
-                outputs_count += 1
-                if mirror_config.get('rot90', False):
-                    images_mirror_rot90 = tf.image.rot90(images_mirror)
-                    outputs_mirror_rot90 = self(images_mirror_rot90, training=False)
-                    outputs_mirror_rot90 = tf.image.rot90(outputs_mirror_rot90, -1)
-                    outputs_mirror_rot90 = tf.reverse(outputs_mirror_rot90, axis=axis)
-                    outputs += outputs_mirror_rot90
-                    outputs_count += 1
+                loss = tf.reduce_mean(loss)
+        gradients = tape.gradient(loss, self.unet.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.unet.trainable_variables))
+        return loss
 
-        outputs = outputs / outputs_count
-        #outputs = tf.clip_by_value(images + outputs, 0., 1.)
-        return outputs
+    ''' >>>>>>>>>>>>>>>>>>> Valid <<<<<<<<<<<<<<<<<<<<<<<<<'''
+    def validate_diffusion(self, validation_paths):
+        self.diffusion_infer_global(validation_paths, output_path=None, sampler='ddim', mode='valid')  # valid
+        # self.diffusion_test_global('/mnt/newdisk/mri2ct/data_training/train_2_brain', output_path=None, sampler='ddim') # 2 train set if need
 
-    def test(self, testing_paths, output_path, **kwargs):
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-            
-        for input_file in testing_paths:
-            with h5py.File(input_file, 'r') as f_h5:
-                if 'input_images' in f_h5.keys():
-                    input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
-                else:
-                    continue
-            output_images = self.run_test(input_file)
-                
-            if output_path is not None:
-                with h5py.File(os.path.join(output_path, os.path.basename(input_file)), 'w') as f_h5:
-                    f_h5['output_images'] = output_images
-    
-    def run_test(self, input_file):
-        all_images, info = self.read_testing_inputs(input_file)
-        all_probs = []
-        for n in range(all_images.shape[0]):
-            # Avoid memory leakage. 
-            # Converting the numpy array to a tensor maintains the same signature and avoids creating new graphs.
-            tensor_im = tf.convert_to_tensor(all_images[n : n + 1, ...], dtype=tf.float32)
-            all_probs.append(self.predict_on_batch(tensor_im))
-        output_labels = np.concatenate(all_probs, axis=0)
-        
-        full_size = info['full_size']
-        pad_size = info['pad_size']
-        pads = [pad_size[ax] - full_size[ax] for ax in range(len(full_size))]
-        output_labels = output_labels[:, pads[0] // 2 : pads[0] // 2 + full_size[0],
-                                      pads[1] // 2 : pads[1] // 2 + full_size[1], ...]
-        
-        if output_labels.shape[0] == 1:
-            output_labels = np.squeeze(output_labels, axis=0)
-        if output_labels.shape[-1] == 1:
-            output_labels = np.squeeze(output_labels, axis=-1)
-        return output_labels
-    
-    class ModelSaver(tf.keras.callbacks.Callback):
-        def __init__(self, saver_config, validation_config=None, custom_log_file=None):
+    ''' >>>>>>>>>>>>>>>>>>> Model Saver <<<<<<<<<<<<<<<<<<<<<<<<< '''
+    class DiffusionModelSaver(tf.keras.callbacks.Callback):
+        def __init__(self, saver_config, validation_config=None, custom_log_file=None, unet=None):
             self.counter = 0
             self.period = saver_config['period']
             self.save = saver_config['save_fn']
             self.validation_config = validation_config
             self.logs = {}
             self.custom_log_file = custom_log_file
-            self.train_writer = tf.summary.create_file_writer(os.path.join(saver_config['log_dir'], 'avg'))
-                
+            self.best_mae = float('inf')
+            self.best_ssim = -float('inf')
+            self.best_mae_epoch = -1
+            self.best_mae_model_path = None
+            self.best_ssim_epoch = -1
+            self.best_ssim_model_path = None
+            self.checkpoint_dir = saver_config.get('checkpoint_dir', None)
+            self.model_dir = saver_config.get('model_dir', None)
+            self.unet = unet
+
+            log_dir = saver_config.get('log_dir', 'logs')
+            self.train_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'avg'))
+            
             if validation_config is not None:
                 self.validation_paths = validation_config['validation_paths']
                 self.validation_fn = validation_config['validation_fn']
                 self.test_writer = tf.summary.create_file_writer(os.path.join(validation_config['log_dir'], 'test'))
-        
+            else:
+                self.test_writer = None
+                
+            print(f"DiffusionModelSaver initialized - save period: {self.period} epochs")
+            print(f"TensorBoard logs will be saved to: {log_dir}/avg")
+
         def on_batch_end(self, batch, logs):
             if len(self.logs) == 0:
                 for key in logs.keys():
@@ -680,314 +475,19 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             else:
                 for key in logs.keys():
                     self.logs[key].append(logs[key])
-        
-        def on_epoch_end(self, epoch, logs):
-            self.counter += 1
-            # Epoch average logs
-            with self.train_writer.as_default():
-                record_logs = {}
-                for key in self.logs.keys():
-                    if 'loss' in key:
-                        epoch_avg = np.array(self.logs[key])[np.nonzero(self.logs[key])].mean()
-                        tf.summary.scalar(f'epoch_{key}', epoch_avg, step=epoch)
-                    else:
-                        epoch_avg = np.nanmean(self.logs[key])
-                        tf.summary.scalar(f'epoch_{key}', epoch_avg, step=epoch)
-                    self.train_writer.flush()
-                    record_logs[key] = epoch_avg
-                if self.custom_log_file is not None:
-                    with open(self.custom_log_file, 'a') as f:
-                        writer = csv.writer(f, delimiter=';')
-                        writer.writerow([datetime.datetime.now().strftime('%d/%b/%Y %H:%M:%S'),
-                             'epoch: %d, dice: %.4f, loss: %.4f' % (epoch + 1, record_logs['dice'], record_logs['loss'])])
-            self.logs = {}
-            # Save / validate
-            if self.counter % self.period == 0:
-                self.save(epoch + 1)
-                if self.validation_config is not None:
-                    val_scores = self.validation_fn(self.validation_paths)
-                    with self.test_writer.as_default():
-                        for metric in val_scores:
-                            tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
-                        self.test_writer.flush()
 
-
-
-
-
-
-
-
-
-
-
-
-    ############ 20250702
-    def diffusion_train(self, run_validation=False, validation_paths=None, resume=None, **kwargs):
-        """
-        完善的扩散模型训练方法，参考 DDPM_base_model_2d.train()
-        
-        Args:
-            run_validation: 是否运行验证
-            validation_paths: 验证集文件路径列表
-            resume: (已弃用) 现在通过初始化时的resume参数控制
-        """
-        if resume is not None:
-            print("[WARNING] The 'resume' parameter in diffusion_train() is deprecated. "
-                  "Please use the 'resume' parameter in model initialization instead.")
-        
-        print("开始扩散模型训练...")
-
-        # Compile model for training
-        self.compile_it()
-        
-        log_dir = os.path.join(self.log_dir, self.model_dir)
-        
-        # 不再手动创建 TensorBoard writer，统一使用回调管理
-        # train_log_dir = os.path.join(log_dir, 'train')
-        # train_writer = tf.summary.create_file_writer(train_log_dir)
-        
-        validation_config = None
-        if run_validation:
-            validation_config = {
-                'validation_paths': validation_paths,
-                'validation_fn': self.validate,
-                'log_dir': log_dir,
-            }
-        saver_config = {
-            'period': self.save_period,
-            'save_fn': self.save,
-            'log_dir': log_dir,
-        }
-        saver_callback = self.DiffusionModelSaver(saver_config=saver_config, validation_config=validation_config)
-        
-        # Prepare data generator
-        num_samples = len(self.training_paths)
-        if num_samples == 0:
-            print('No training data')
-            return
-        
-        # 使用当前的计数器值作为训练起点
-        print(f'Steps per epoch: {self.steps_per_epoch}')
-        print(f'Training from epoch {self.counter} to {self.epoch}')
-
-        idx_list = np.arange(num_samples)
-        total_iters = self.steps_per_epoch * (self.epoch - self.counter)
-        data_generator = self.data_generator(idx_list, total_iters)
-        
-        if total_iters > 0:
-            print('Running on complete dataset with total training samples:', num_samples)
-            
-            # 创建回调列表（移除 TensorBoard 回调，使用手动日志写入）
-            callbacks = [saver_callback]
-            
-            # 模拟 fit() 的回调生命周期
-            # 1. on_train_begin
-            for callback in callbacks:
-                callback.on_train_begin()
-            
-            # 训练循环
-            for epoch in range(self.counter, self.epoch):
-                print(f"\nEpoch {epoch + 1}/{self.epoch}")
-                
-                # 2. on_epoch_begin
-                for callback in callbacks:
-                    callback.on_epoch_begin(epoch)
-                
-                # 重置指标
-                train_loss_metric = tf.keras.metrics.Mean()
-                
-                # 进度条
-                progress_bar = tf.keras.utils.Progbar(
-                    target=self.steps_per_epoch, 
-                    stateful_metrics=['loss', 'lr']
-                )
-                
-                # 训练一个 epoch
-                step_count = 0
-                for input_batch, target_batch, mask_batch in data_generator:
-                    if step_count >= self.steps_per_epoch:
-                        break
-                    # 3. on_batch_begin
-                    for callback in callbacks:
-                        callback.on_batch_begin(step_count)
-                    
-
-                    # 执行训练步骤
-                    # print('input_batch shape:', input_batch.shape,'target_batch shape:', target_batch.shape, 'mask_batch shape:', mask_batch.shape)
-                    # (bs,256,256,1) (bs,256,256,1) (bs,256,256,1)
-                    step_loss = self._diffusion_train_step(input_batch, target_batch,mask_batch)
-
-                    # 更新指标
-                    train_loss_metric.update_state(step_loss)
-                    
-                    # 获取当前学习率
-                    if hasattr(self.optimizer.learning_rate, '__call__'):
-                        current_step = epoch * self.steps_per_epoch + step_count
-                        current_lr = float(self.optimizer.learning_rate(current_step))
-                    else:
-                        current_lr = float(self.optimizer.learning_rate)
-                    
-                    # 准备批次日志
-                    batch_logs = {
-                        'loss': float(step_loss),
-                        'lr': current_lr
-                    }
-                    
-                    # 4. on_batch_end
-                    for callback in callbacks:
-                        callback.on_batch_end(step_count, batch_logs)
-                    
-                    # 更新进度条
-                    progress_bar.update(
-                        current=step_count + 1,
-                        values=[
-                            ('loss', train_loss_metric.result().numpy()),
-                            ('lr', current_lr)
-                        ]
-                    )
-                    
-                    step_count += 1
-                
-                # Epoch 结束处理
-                epoch_loss = train_loss_metric.result()
-                
-                # 准备 epoch 日志
-                epoch_logs = {
-                    'loss': float(epoch_loss),
-                    'lr': current_lr
-                }
-                
-                # TensorBoard 日志由 DiffusionModelSaver 回调统一管理
-                print(f"Epoch {epoch + 1} - Loss: {epoch_loss:.6f}, LR: {current_lr:.8f}")
-                
-                # 5. on_epoch_end
-                for callback in callbacks:
-                    callback.on_epoch_end(epoch, epoch_logs)
-
-                # 重置度量
-                train_loss_metric.reset_states()
-            
-            # 6. on_train_end
-            for callback in callbacks:
-                callback.on_train_end()
-
-            # TensorBoard writer 由回调管理，无需手动关闭
-
-            self.save(self.epoch)  # 保存最后一个 epoch 的检查点
-        
-        print("训练完成!")
-    
-    @tf.function
-    def _diffusion_train_step(self, input_batch, target_batch,mask_batch):    # 有的loss用mask计算，这里不确定要不要
-        """单个训练步骤"""
-        with tf.GradientTape() as tape:
-            loss = self.diffusion_trainer.forward(x_0=target_batch, context=input_batch)
-            loss = tf.reduce_mean(loss)
-        
-        # 计算梯度并更新模型
-        gradients = tape.gradient(loss, self.unet.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.unet.trainable_variables))
-        
-        return loss
-    
-
-    ############# 还没修改
-    def validate_diffusion(self, validation_paths):
-        """
-        扩散模型验证方法
-        """
-        if not validation_paths:
-            return {'mae': 0.0, 'mse': 0.0}
-        
-        print("Running validation...")
-        val_losses = []
-        
-        for val_path in validation_paths[:min(10, len(validation_paths))]:  # 限制验证样本数量
-            try:
-                # 生成验证样本
-                with h5py.File(val_path, 'r') as f_h5:
-                    cbct = np.asarray(f_h5['input_images'], dtype=np.float32)
-                    ct = np.asarray(f_h5['output_images'], dtype=np.float32)
-                
-                # 添加批次和通道维度
-                cbct = tf.expand_dims(tf.expand_dims(cbct, 0), -1)
-                ct = tf.expand_dims(tf.expand_dims(ct, 0), -1)
-                
-                # 计算验证损失
-                val_loss = self.diffusion_trainer.forward(x_0=ct, context=cbct)
-                val_losses.append(float(tf.reduce_mean(val_loss)))
-                
-            except Exception as e:
-                print(f"Validation error for {val_path}: {str(e)}")
-                continue
-        
-        avg_val_loss = np.mean(val_losses) if val_losses else 0.0
-        print(f"Validation loss: {avg_val_loss:.6f}")
-        
-        return {'loss': avg_val_loss, 'mse': avg_val_loss}
-  
-
-    class DiffusionModelSaver(ModelSaver):
-        """
-        扩散模型专用的模型保存回调，继承基类 ModelSaver 并扩展手动训练循环所需的功能
-        """
-        def __init__(self, saver_config, validation_config=None, custom_log_file=None):
-            # 不调用父类初始化，避免创建重复的 writer
-            self.counter = 0
-            self.period = saver_config['period']
-            self.save = saver_config['save_fn']
-            self.validation_config = validation_config
-            self.logs = {}
-            self.custom_log_file = custom_log_file
-            
-            # 与 ModelSaver 保持一致，统一使用 'avg' 目录
-            log_dir = saver_config.get('log_dir', 'logs')
-            self.train_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'avg'))
-            
-            if validation_config is not None:
-                self.validation_paths = validation_config['validation_paths']
-                self.validation_fn = validation_config['validation_fn']
-                # 与 ModelSaver 保持一致，验证指标写入 test 目录
-                self.test_writer = tf.summary.create_file_writer(os.path.join(validation_config['log_dir'], 'test'))
-            else:
-                self.test_writer = None
-                
-            print(f"DiffusionModelSaver initialized - save period: {self.period} epochs")
-            print(f"TensorBoard logs will be saved to: {log_dir}/avg")
-        
-        def on_train_begin(self, logs=None):
-            """训练开始时的处理"""
-            print(f"Starting diffusion training with save period of {self.period} epochs")
-        
-        def on_epoch_begin(self, epoch, logs=None):
-            """Epoch 开始时的处理"""
-            pass
-        
-        def on_batch_begin(self, batch, logs=None):
-            """批次开始时的处理"""
-            pass
-        
         def on_epoch_end(self, epoch, logs=None):
-            """统一的 epoch 结束处理，写入 TensorBoard 和管理模型保存"""
             if logs is None:
                 logs = {}
-                
             self.counter += 1
-            
-            # 写入主要的训练指标到 TensorBoard
             with self.train_writer.as_default():
-                # 写入当前 epoch 的 loss 和学习率
                 if 'loss' in logs:
                     tf.summary.scalar('loss', logs['loss'], step=epoch)
                 if 'lr' in logs:
                     tf.summary.scalar('learning_rate', logs['lr'], step=epoch)
-                
-                # 如果有批次数据，也写入批次平均值
                 if self.logs:
                     for key in self.logs.keys():
                         if 'loss' in key:
-                            # 对于 loss 指标，过滤掉 0 值并计算平均
                             non_zero_values = np.array(self.logs[key])[np.nonzero(self.logs[key])]
                             if len(non_zero_values) > 0:
                                 batch_avg = non_zero_values.mean()
@@ -995,10 +495,8 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                         else:
                             batch_avg = np.nanmean(self.logs[key])
                             tf.summary.scalar(f'batch_avg_{key}', batch_avg, step=epoch)
-                
                 self.train_writer.flush()
-            
-            # 记录到自定义日志文件（如果有）
+
             if self.custom_log_file is not None:
                 import csv
                 import datetime
@@ -1009,35 +507,53 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                     writer.writerow([datetime.datetime.now().strftime('%d/%b/%Y %H:%M:%S'),
                                    f'epoch: {epoch + 1}, loss: {loss_val:.6f}, lr: {lr_val:.8f}'])
             
-            # 重置批次日志
             self.logs = {}
-            
-            # 保存和验证
-            if self.counter % self.period == 0:
-                print(f"\nSaving checkpoint at epoch {epoch + 1}...")
-                self.save(epoch + 1, max_to_keep=3)  # 保留3个最新模型
-                
-                # 运行验证（如果配置了）
-                if self.validation_config is not None:
-                    print("Running validation...")
-                    try:
-                        val_scores = self.validation_fn(self.validation_paths)    
-                        
-                        # 记录验证结果到 TensorBoard
-                        if hasattr(self, 'test_writer') and self.test_writer is not None:
-                            with self.test_writer.as_default():
-                                for metric in val_scores:
-                                    tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
-                                self.test_writer.flush()
-                        
-                        print(f"Validation results: {val_scores}")
-                    except Exception as e:
-                        print(f"Validation failed: {str(e)}")
-                
+
+            # period save
+            if (epoch + 1) % self.period == 0:
+                self.save(epoch + 1, max_to_keep=10)
                 print(f"Checkpoint saved at epoch {epoch + 1}")
-        
+            # Valid
+            if (epoch + 1) % self.period == 0:
+              if self.validation_config is not None:
+                  try:
+                      val_scores = self.validation_fn(self.validation_paths)   
+                      mae_val = val_scores.get('mae', None)
+                      ssim_val = val_scores.get('ssim', None)
+                      if hasattr(self, 'test_writer') and self.test_writer is not None:
+                          with self.test_writer.as_default():
+                              for metric in val_scores:
+                                  tf.summary.scalar(metric, val_scores[metric], step=epoch + 1)
+                              self.test_writer.flush()
+                          print(f"Validation results: {val_scores}")
+                       # save best valid model
+                      if mae_val is not None and mae_val < self.best_mae:
+                          self.best_mae = mae_val
+                          self.best_mae_epoch = epoch + 1
+                          best_mae_model_path = os.path.join(self.checkpoint_dir, self.model_dir, 
+                                                             'model_epoch%06d_best_mae.h5' % self.best_mae_epoch)
+                          # Remove old best_mae models
+                          for f in glob.glob(os.path.join(self.checkpoint_dir, self.model_dir, '*best_mae.h5')):
+                              if f != best_mae_model_path and os.path.exists(f):
+                                  os.remove(f)
+                          self.unet.save(best_mae_model_path)
+                          self.best_mae_model_path = best_mae_model_path
+                          print(f"Best MAE improved to {mae_val:.6f} at epoch {epoch+1}, model saved to {best_mae_model_path}")
+                      if ssim_val is not None and ssim_val > self.best_ssim:
+                          self.best_ssim = ssim_val
+                          self.best_ssim_epoch = epoch + 1
+                          self.best_ssim_model_path = os.path.join(self.checkpoint_dir, self.model_dir, 
+                                                                   'model_epoch%06d_best_ssim.h5' % self.best_ssim_epoch)
+                          # Remove old best_ssim models
+                          for f in glob.glob(os.path.join(self.checkpoint_dir, self.model_dir, '*best_ssim.h5')):
+                              if f != self.best_ssim_model_path and os.path.exists(f):
+                                  os.remove(f)
+                          self.unet.save(self.best_ssim_model_path)
+                          print(f"Best SSIM improved to {ssim_val:.6f} at epoch {epoch+1}, model saved to {self.best_ssim_model_path}")
+                  except Exception as e:
+                      print(f"Validation failed: {str(e)}")
+
         def on_train_end(self, logs=None):
-            """训练结束时的处理，关闭 TensorBoard writers"""
             print("Training completed, closing TensorBoard writers...")
             if hasattr(self, 'train_writer') and self.train_writer is not None:
                 self.train_writer.close()
@@ -1045,96 +561,149 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 self.test_writer.close()
             print("TensorBoard writers closed.")
     
-    ################# 20250702 test: reverse sampling
-    def diffusion_test(self, testing_paths, output_path, squeue=None, **kwargs):
-        # 加载模型
-        _loaded, self.counter = self.load()
-        if _loaded:
-          self.diffusion_sampler = GaussianDiffusionSampler(
-              model=self.unet,
-              beta_1=self.beta_1,
-              beta_T=self.beta_T,
-              T=self.max_timesteps,
-              squeue=squeue
-          )
-        else:
-            raise ValueError("model load failed.")
-        
 
-        for i, input_file in enumerate(testing_paths):
-            with h5py.File(input_file, 'r') as f_h5:
-                if 'input_images' in f_h5.keys():
-                    input_images = np.asarray(f_h5['input_images'], dtype=np.float32)
-                    print('original input:',input_images.shape)##
-                    filename = os.path.splitext(os.path.basename(input_file))[0]   # 文件名
-                    save_path = os.path.join(output_path, filename)
-                    os.makedirs(save_path, exist_ok=True)
-                else:
-                    continue
-            gengerated = self.diffusion_run_test(input_file, squeue=squeue, save_path=save_path)
-            print(f'--------- Sample_{i+1} saved!! ----------------')
-
-
-          
-    def diffusion_run_test(self, input_file, squeue, save_path):
-        all_images, info = self.read_testing_inputs(input_file)   # [h',w', d',channel]
-        print('all_imgs:',all_images.shape)
-        all_images_2d = all_images[all_images.shape[0] // 2, ...]  # 取中间切片
-
-        # plt.figure(figsize=(6, 6))
-        # plt.imshow(all_images_2d, cmap='gray')
-        # plt.title(f'context_before_test')
-        # plt.axis('off')
-        # plt.savefig(os.path.join(save_path, f'context_before_test.png'))
-        # plt.close()
-
-        all_images_2d = np.expand_dims(all_images_2d, axis=0)  # 添加 batch 维度=1
-        generated = self._diffusion_sample_step(context=all_images_2d, squeue=squeue, save_path=save_path) # [1, h', w', save_steps]
-        print('gen:',generated.shape)##
-
+    ''' >>>>>>>>>>>>>>>>>>> Inference <<<<<<<<<<<<<<<<<<<<<<<<<'''
+    def diffusion_run_test(self, input_img, sampler='ddim', squeue=None, save_path=None):
+      all_images, info = self.read_testing_inputs(input_img)   # [d, h, w, channel],[d, h, w]
+      print('pad img:',all_images.shape)
+      num_slices = all_images.shape[0] # d
+      generated_list = []
+      for sli in range(num_slices):
+        if (sli+1) % 20 == 0:
+            print(f'Processing slice {sli + 1}/{num_slices}...')
+        context_sli = all_images[sli]  # [h, w, channel]
+        context_sli = np.expand_dims(context_sli, axis=0)  # batch=1，[1, h, w, channel]
+        gen = self._diffusion_sample_step(context=context_sli, sampler=sampler, squeue=squeue, save_path=save_path)  # [1, h, w, save_steps]
+        # restore
         full_size = info['full_size']
         pad_size = info['pad_size']
         pads = [pad_size[ax] - full_size[ax] for ax in range(len(full_size))]
-        generated = generated[:, pads[0] // 2 : pads[0] // 2 + full_size[0],      # 恢复尺寸
-                                      pads[1] // 2 : pads[1] // 2 + full_size[1], ...]
-        print('after crop gen:',generated.shape)##
+        gen = gen[:, pads[0] // 2 : pads[0] // 2 + full_size[0],
+              pads[1] // 2 : pads[1] // 2 + full_size[1], ...]  # [1, h, w]
+        generated_list.append(gen)
+      generated = np.concatenate(generated_list, axis=0)  # [num_slices(d), h, w]
 
-        return generated    # [1, h, w, save_steps]
+      return generated   # [d, h, w]
 
-
-    ############# 扩散采样步骤
-    def _diffusion_sample_step(self, context, squeue=None, save_path=None):
-        """ 单个扩散采样步骤
-        Args:
-            context: 条件输入(CBCT图像)
-            squeue: 保存中间结果的间隔步数
-            save_dir: 保存目录
-        """
-        # 生成样本
+    def _diffusion_sample_step(self, context, sampler='ddim', squeue=None, save_path=None):
         x_T = tf.random.normal(tf.shape(context))   # [batch_size, H, W, channels]
-        generated = self.diffusion_sampler.reverse(x_T, context=context)    
-        print(f"Generated shape: {generated.shape}")
-        
-        
-        # 保存结果
-        if squeue is not None:
-            # 保存中间结果
-            for step in range(generated.shape[-1]):   # [batch_size, W, D, save_steps]
+        if sampler == 'ddim':
+            generated = self.diffusion_sampler.ddim_reverse(x_T=x_T, context=context)    
+        elif sampler == 'ddpm':
+            generated = self.diffusion_sampler.ddpm_reverse(x_T=x_T, context=context)
+        # print(f"Generated shape: {generated.shape}")
+        if save_path is not None:
+          if squeue is not None:
+                # Save intermediate results
+              for step in range(generated.shape[-1]):   # [batch_size, W, D, save_steps]
                 plt.figure(figsize=(6, 6))
-                plt.imshow(generated[0, ..., step], cmap='gray')
-                plt.title(f'x_{self.max_timesteps-(step+1)*squeue}')
+                plt.imshow(generated[generated.shape[0]//2, ..., step], cmap='gray')
                 plt.axis('off')
-                plt.savefig(os.path.join(save_path, f'step_{self.max_timesteps-(step+1)*squeue:04d}.png'))
+                step_num = self.max_timesteps-(step+1)*squeue
+                title = f'x_{step_num}'
+                filename = f'step_{step_num:04d}.png'
+                plt.title(title)
+                plt.axis('off')
+                plt.savefig(os.path.join(save_path, filename))
                 plt.close()
-        else:
-            # 只保存最终结果
-            plt.figure(figsize=(6, 6))
-            plt.imshow(generated[0, ..., -1], cmap='gray')
-            plt.title(f'x_{generated.shape[-1]}')
-            plt.axis('off')
-            plt.savefig(os.path.join(save_path, f'final_x0.png'))
-            plt.close()
+          else:
+              # save last result
+              plt.figure(figsize=(6, 6))
+              plt.imshow(generated[generated.shape[0]//2, ..., -1], cmap='gray')
+              plt.title('x_0')
+              plt.axis('off')
+              plt.savefig(os.path.join(save_path, f'final_x0.png'))
+              plt.close()
         
         return generated
 
+    def diffusion_infer_global(self, testing_paths, output_path=None, sampler='ddim', mode='test', **kwargs):
+        # np.random.seed(42)
+        # tf.random.set_seed(42)
+        print("Diffusion global inference start...")
+        if mode == 'test':  # Only load model if mode is 'test'
+            _loaded, self.counter = self.load()
+            if _loaded:
+                self.diffusion_sampler = GaussianDiffusionSampler(
+                    model=self.unet,
+                    beta_1=self.beta_1,
+                    beta_T=self.beta_T,
+                    T=self.max_timesteps,
+                    infer_T=self.infer_T,
+                    squeue=self.squeue
+                )
+            else:
+                raise ValueError("model load failed.")
+        
+        if output_path is not None:
+            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}")
+            os.makedirs(save_dir, exist_ok=True)
+
+        ## read data
+        folder_path = testing_paths
+        all_files = []
+        # list or tuple
+        if isinstance(folder_path, (list, tuple)):
+            for single_folder in folder_path:
+                if isinstance(single_folder, (list, tuple)):
+                    for sub_folder in single_folder:
+                        all_files.extend(sorted(glob.glob(os.path.join(str(sub_folder)))))
+                else:
+                    all_files.extend(sorted(glob.glob(os.path.join(str(single_folder)))))
+        else:
+            # file folder
+            if os.path.isdir(folder_path):
+                all_files.extend(sorted(glob.glob(os.path.join(folder_path, "*.hdf5"))))
+            # hdf5 file
+            elif os.path.isfile(folder_path) and folder_path.endswith('.hdf5'):
+                all_files.append(folder_path)
+      
+
+        print(f">>>>>>>>>>> Start infer: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
+        for i, file_path in enumerate(sorted(all_files)):
+            with h5py.File(file_path, 'r') as f_h5:
+                file_name = os.path.splitext(os.path.basename(file_path))[0]
+                if output_path is not None:
+                  save_h5_path = os.path.join(save_dir, f"{file_name}.hdf5")
+                  if os.path.exists(save_h5_path):
+                      print(f'Case {i+1}/{len(all_files)}: {file_name} already exists, skipping...')
+                      continue
+                print(f'Case {i+1}/{len(all_files)}: {file_name} is preding...')
+                input_img = np.asarray(f_h5['input_images'], dtype=np.float32)
+                input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8)
+                output_img = np.asarray(f_h5['output_images'], dtype=np.float32)
+                output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8)
+                print('input_img:',input_img.shape)
+                # mask-based crop
+                bbox,full_size = self.get_bbox_from_mask(input_images_mask)
+                input_img_crop = self.crop_with_bbox(input_img, bbox)
+                print('input_img_crop:',input_img_crop.shape)
+                # per slice
+                t1 = time.time()
+                pred_crop = self.diffusion_run_test(input_img=input_img_crop, sampler=sampler)[...,-1]
+                t2 = time.time()
+                pred_crop = np.array(pred_crop)
+                print(f"pred_crop shape: {pred_crop.shape}")
+                # restore to original shape
+                pred = self.restore_with_bbox(pred_crop,bbox,full_size)
+                print(f"pred shape: {pred.shape}")
+
+                # save results
+                if output_path is not None:
+                    with h5py.File(save_h5_path, 'w') as f:
+                        f.create_dataset('output', data=pred, dtype='float32')
+                        f.create_dataset('input', data=input_img, dtype='float32')
+                        f.create_dataset('target', data=output_img, dtype='float32')
+                        f.create_dataset('input_mask', data=input_images_mask, dtype='float32')
+                        f.create_dataset('output_mask', data=output_images_mask, dtype='float32')
+                    print(f"Saved results to {save_h5_path}")
+                # metrics
+                mae = np.mean(np.abs(output_img - pred))
+                try:
+                    ssim_val = ssim(pred, output_img, data_range=1.0, channel_axis=None)
+                except Exception:
+                    ssim_val = np.nan
+                print(f"MAE: {mae:.4f}, SSIM: {ssim_val:.4f}, sampling time: {t2 - t1:.4f} s")
+        
+        print(f">>>>>>>>>>> Finish infer: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
 
