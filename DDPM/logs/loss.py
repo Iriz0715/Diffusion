@@ -5,7 +5,6 @@ import numpy as np
 dir = 'DDPM/logs'
 mat = sio.loadmat(dir + '/ddpm_unet2d_all.mat')
 tr_ls = mat['loss'].flatten()
-print("loss长度:", len(tr_ls))
 
 start_epoch =10 
 plt.figure(figsize=(8,5))
