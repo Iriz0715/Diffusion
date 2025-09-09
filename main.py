@@ -5,7 +5,6 @@ import tensorflow as tf
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'models'))
 from models.ImageTransformUNet2D import ImageTransformUNet2D
 from models.DDPM_UNet2D import DDPM_UNet2D
-from models.DDPM_UNet3D import DDPM_UNet3D
 from models.CycleGAN import CycleGAN
 
 parser = argparse.ArgumentParser()
