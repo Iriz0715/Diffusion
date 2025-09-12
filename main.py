@@ -1,7 +1,9 @@
 import os, sys, argparse, multiprocessing
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 import numpy as np
 import tensorflow as tf
-
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'models'))
 from models.ImageTransformUNet2D import ImageTransformUNet2D
 from models.DDPM_UNet2D import DDPM_UNet2D
