@@ -725,7 +725,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 raise ValueError("model load failed.")
         
         if output_path is not None:
-            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}_mask")
+            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}")
             os.makedirs(save_dir, exist_ok=True)
 
         ## read data
