@@ -260,7 +260,6 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 bbox, _ = self.get_bbox_from_mask(input_images_mask)
                 file_bbox_dict[file_path] = bbox
                 z_min, z_max, y_min, y_max, x_min, x_max = bbox
-                # 只保留z范围内有前景的slice
                 for z in range(z_min, z_max):
                     if np.any(input_images_mask[z, y_min:y_max, x_min:x_max] > 0):
                         slice_index.append((file_path, z))
@@ -415,7 +414,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                                            batch_size=self.batch_size, shuffle=True,
                                            patch=True)
         # slice_index, file_bbox_dict = self.build_global_slice_index(self.training_paths)
-        print(f'Train slices: {len(slice_index)}')
+        # print(f'Train slices: {len(slice_index)}')
 
         print('Training data loaded successfully!!')
         num_samples = len(self.training_paths)
