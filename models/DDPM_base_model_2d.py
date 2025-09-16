@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt 
-from Diffusion import GaussianDiffusionTrainer, GaussianDiffusionSampler
+from models.Diffusion import GaussianDiffusionTrainer, GaussianDiffusionSampler
 import time
 import scipy.io as sio
 from skimage.metrics import structural_similarity as ssim
@@ -62,6 +62,42 @@ class DDPMBaseModel2D(tf.keras.models.Model):
               (shift[1]+start_pos[1]):(shift[1]+start_pos[1]+target_size[1])]
         return y
 
+    # crop background based on mask
+    @staticmethod
+    def get_bbox_from_mask(mask, threshold=0, margin=5):
+        # mask: [d, w, h]
+        full_size = mask.shape
+        pos = np.where(mask > threshold)
+        z_min, y_min, x_min = np.min(pos, axis=1)
+        z_max, y_max, x_max = np.max(pos, axis=1) + 1
+        z_min = max(z_min - margin, 0)
+        y_min = max(y_min - margin, 0)
+        x_min = max(x_min - margin, 0)
+        z_max = min(z_max + margin, mask.shape[0])
+        y_max = min(y_max + margin, mask.shape[1])
+        x_max = min(x_max + margin, mask.shape[2])
+        return (z_min, z_max, y_min, y_max, x_min, x_max),full_size
+    
+    @staticmethod
+    def crop_with_bbox(arr, bbox):
+        if arr.ndim == 3:
+            z_min, z_max, y_min, y_max, x_min, x_max = bbox
+            return arr[z_min:z_max, y_min:y_max, x_min:x_max]
+        elif arr.ndim == 2:
+            # 只用y/x
+            _, _, y_min, y_max, x_min, x_max = bbox
+            return arr[y_min:y_max, x_min:x_max]
+        else:
+            raise ValueError(f"Unsupported arr.ndim={arr.ndim} for crop_with_bbox")
+    
+    # Restore to original size
+    @staticmethod
+    def restore_with_bbox(cropped, bbox, shape):
+        arr = np.zeros(shape, dtype=cropped.dtype)
+        z_min, z_max, y_min, y_max, x_min, x_max = bbox
+        arr[z_min:z_max, y_min:y_max, x_min:x_max] = cropped
+        return arr
+    
     def get_training_patch(self, images, full_size, im_size, enlarged_im_size):
         full_size = list(full_size)
         # Pad
@@ -125,10 +161,12 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8) if 'output_images_mask' in f_h5.keys() else np.zeros_like(output_img, dtype=np.uint8)
             # input_img = input_img * 2. - 1.  ############ Scale to [-1, 1]
             # output_img = output_img * 2. - 1. ############ Scale to [-1, 1]
+            # input_img = input_img * input_images_mask   # mask if need
+            # output_img = output_img * output_images_mask
             full_size = input_img.shape[1:]
             results = []
             for i in range(input_img.shape[0]):
-              if patch==True: # 随机 patch
+              if patch==True: # patch
                 input_img_ch = np.expand_dims(input_img[i], axis=-1)
                 output_img_ch = np.expand_dims(output_img[i], axis=-1)
                 input_images_mask_ch = np.expand_dims(input_images_mask[i], axis=-1)
@@ -159,7 +197,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 np.array(arrs[4], dtype=np.bytes_)
             )
 
-    def get_trainning_dataset(self, folder_path, target_size, patch=True, batch_size=8, shuffle=True):
+    def get_training_dataset(self, folder_path, target_size, patch=True, batch_size=8, shuffle=True):
         all_files = []
         # list or tuple
         if isinstance(folder_path, (list, tuple)):
@@ -200,34 +238,77 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         ds = ds.prefetch(tf.data.AUTOTUNE)
         return ds
 
-    # crop background based on mask
-    @staticmethod
-    def get_bbox_from_mask(mask, threshold=0, margin=5):
-        # mask: [d, w, h]
-        full_size = mask.shape
-        pos = np.where(mask > threshold)
-        z_min, y_min, x_min = np.min(pos, axis=1)
-        z_max, y_max, x_max = np.max(pos, axis=1) + 1
-        z_min = max(z_min - margin, 0)
-        y_min = max(y_min - margin, 0)
-        x_min = max(x_min - margin, 0)
-        z_max = min(z_max + margin, mask.shape[0])
-        y_max = min(y_max + margin, mask.shape[1])
-        x_max = min(x_max + margin, mask.shape[2])
-        return (z_min, z_max, y_min, y_max, x_min, x_max),full_size
-    
-    @staticmethod
-    def crop_with_bbox(arr, bbox):
-        z_min, z_max, y_min, y_max, x_min, x_max = bbox
-        return arr[z_min:z_max, y_min:y_max, x_min:x_max]
-    
-    # Restore to original size
-    @staticmethod
-    def restore_with_bbox(cropped, bbox, shape):
-        arr = np.zeros(shape, dtype=cropped.dtype)
-        z_min, z_max, y_min, y_max, x_min, x_max = bbox
-        arr[z_min:z_max, y_min:y_max, x_min:x_max] = cropped
-        return arr
+    def build_global_slice_index(self, folder_path):
+        all_files = []
+        if isinstance(folder_path, (list, tuple)):
+            for single_folder in folder_path:
+                if isinstance(single_folder, (list, tuple)):
+                    for sub_folder in single_folder:
+                        all_files.extend(sorted(glob.glob(os.path.join(str(sub_folder)))))
+                else:
+                    all_files.extend(sorted(glob.glob(os.path.join(str(single_folder)))))
+        else:
+            if os.path.isdir(folder_path):
+                all_files.extend(sorted(glob.glob(os.path.join(folder_path, "*.hdf5"))))
+            elif os.path.isfile(folder_path) and folder_path.endswith('.hdf5'):
+                all_files.append(folder_path)
+        slice_index = []
+        file_bbox_dict = {}
+        for file_path in all_files:
+            with h5py.File(file_path, 'r') as f:
+                input_images_mask = np.asarray(f['input_images_mask'], dtype=np.uint8) if 'input_images_mask' in f.keys() else np.zeros_like(f['input_images'], dtype=np.uint8)
+                bbox, _ = self.get_bbox_from_mask(input_images_mask)
+                file_bbox_dict[file_path] = bbox
+                z_min, z_max, y_min, y_max, x_min, x_max = bbox
+                # 只保留z范围内有前景的slice
+                for z in range(z_min, z_max):
+                    if np.any(input_images_mask[z, y_min:y_max, x_min:x_max] > 0):
+                        slice_index.append((file_path, z))
+        slice_index = list(slice_index)
+
+        return slice_index, file_bbox_dict
+
+    def dynamic_training_batch(self, slice_index, file_bbox_dict, batch_size=8, shuffle=True):
+        if shuffle:
+            np.random.shuffle(slice_index)
+        for start in range(0, len(slice_index), batch_size):
+            batch_idx = slice_index[start:start + batch_size]
+            batch_in, batch_out = [], []
+            for file_path, i in batch_idx:
+                i = int(i)
+                bbox = file_bbox_dict[file_path]
+                with h5py.File(file_path, 'r') as f:
+                    input_img = np.asarray(f['input_images'][i], dtype=np.float32)
+                    output_img = np.asarray(f['output_images'][i], dtype=np.float32)
+                    input_images_mask = np.asarray(f['input_images_mask'][i], dtype=np.uint8) if 'input_images_mask' in f.keys() else np.zeros_like(input_img, dtype=np.uint8)
+                    input_img_masked = input_img * input_images_mask
+                    output_img_masked = output_img * input_images_mask
+                    input_img_crop = self.crop_with_bbox(input_img_masked, bbox)
+                    output_img_crop = self.crop_with_bbox(output_img_masked, bbox)
+                    # input_img_crop = self.crop_pad2D(input_img, [512,512])
+                    # output_img_crop = self.crop_pad2D(output_img, [512,512])
+                    batch_in.append(input_img_crop)
+                    batch_out.append(output_img_crop)
+            max_h = max(arr.shape[0] for arr in batch_in)
+            max_w = max(arr.shape[1] for arr in batch_in)
+            dividable_by = 2 ** self.layer_number
+            pad_h = int(np.ceil(max_h / dividable_by) * dividable_by)
+            pad_w = int(np.ceil(max_w / dividable_by) * dividable_by)
+            def pad(arr):
+                h, w = arr.shape[:2]
+                pad_top = (pad_h - h) // 2
+                pad_bottom = pad_h - h - pad_top
+                pad_left = (pad_w - w) // 2
+                pad_right = pad_w - w - pad_left
+                pad_width = [(pad_top, pad_bottom), (pad_left, pad_right)]
+                if arr.ndim == 3:
+                    pad_width.append((0, 0))
+                return np.pad(arr, pad_width, mode='constant')
+            batch_in = np.stack([pad(arr) for arr in batch_in], axis=0)
+            batch_out = np.stack([pad(arr) for arr in batch_out], axis=0)
+            batch_in = np.expand_dims(batch_in, axis=-1)
+            batch_out = np.expand_dims(batch_out, axis=-1)
+            yield batch_in, batch_out
 
     # pad to multiples of layers
     def read_testing_inputs(self, images):
@@ -300,6 +381,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         return all_images, info    # [d, h, w, c], [d, h, w]
 
 
+
     ''' >>>>>>>>>>>>>>>>>>> Train <<<<<<<<<<<<<<<<<<<<<<<<'''
     def diffusion_train(self, run_validation=False, validation_paths=None, **kwargs):
         print("Start Diffusion Training...")
@@ -332,6 +414,9 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         train_data = self.get_training_dataset(self.training_paths, target_size=self.im_size,
                                            batch_size=self.batch_size, shuffle=True,
                                            patch=True)
+        # slice_index, file_bbox_dict = self.build_global_slice_index(self.training_paths)
+        print(f'Train slices: {len(slice_index)}')
+
         print('Training data loaded successfully!!')
         num_samples = len(self.training_paths)
         num_slices = 0
@@ -357,10 +442,13 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             print(f">>>>>>>>>>> Start training: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
             start_time_all = time.time()
             for epoch in range(self.counter, self.epoch):
+                # train_data = self.dynamic_training_batch(slice_index, file_bbox_dict, batch_size=self.batch_size, shuffle=True) # dyna batch shape
                 train_loss_metric = tf.keras.metrics.Mean()
                 iter_times = []
                 with tqdm(total=self.steps_per_epoch, ncols=100, desc=f"Epoch {epoch+1}", leave=False, disable=True) as pbar:
-                    for step_count, (input_batch, target_batch, _,_, _) in enumerate(train_data):
+                    for step_count, batch in enumerate(train_data):
+                        input_batch, target_batch = batch[0], batch[1]
+                        #print(input_batch.shape, target_batch.shape)
                         start_time = time.time()
                         if step_count >= self.steps_per_epoch:  # max training step for per epoch
                             break
@@ -433,9 +521,10 @@ class DDPMBaseModel2D(tf.keras.models.Model):
 
     ''' >>>>>>>>>>>>>>>>>>> Valid <<<<<<<<<<<<<<<<<<<<<<<<<'''
     def validate_diffusion(self, validation_paths):
-        self.diffusion_infer_global(validation_paths, output_path=None, sampler='ddim', mode='valid')  # valid
-        # self.diffusion_test_global('/mnt/newdisk/mri2ct/data_training/train_2_brain', output_path=None, sampler='ddim') # 2 train set if need
-
+        avg_mae, avg_ssim = self.diffusion_infer_global(validation_paths, output_path=None, sampler='ddim', mode='valid')  # valid
+        # avg_mae_tr, avg_ssim_tr = self.diffusion_test_global('/mnt/newdisk/mri2ct/data_training/train_2_brain', output_path=None, sampler='ddim') # 2 train set if need
+        return {'mae': avg_mae, 'ssim': avg_ssim}
+        
     ''' >>>>>>>>>>>>>>>>>>> Model Saver <<<<<<<<<<<<<<<<<<<<<<<<< '''
     class DiffusionModelSaver(tf.keras.callbacks.Callback):
         def __init__(self, saver_config, validation_config=None, custom_log_file=None, unet=None):
@@ -514,7 +603,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 self.save(epoch + 1, max_to_keep=10)
                 print(f"Checkpoint saved at epoch {epoch + 1}")
             # Valid
-            if (epoch + 1) % self.period == 0:
+            if (epoch + 1) % 50 == 0:
               if self.validation_config is not None:
                   try:
                       val_scores = self.validation_fn(self.validation_paths)   
@@ -607,7 +696,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 plt.savefig(os.path.join(save_path, filename))
                 plt.close()
           else:
-              # save last result
+              # save the last result
               plt.figure(figsize=(6, 6))
               plt.imshow(generated[generated.shape[0]//2, ..., -1], cmap='gray')
               plt.title('x_0')
@@ -636,7 +725,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 raise ValueError("model load failed.")
         
         if output_path is not None:
-            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}")
+            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}_mask")
             os.makedirs(save_dir, exist_ok=True)
 
         ## read data
@@ -660,7 +749,9 @@ class DDPMBaseModel2D(tf.keras.models.Model):
       
 
         print(f">>>>>>>>>>> Start infer: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
-        for i, file_path in enumerate(sorted(all_files)):
+        all_mae = []
+        all_ssim = []
+        for i, file_path in enumerate(reversed(sorted(all_files))):
             with h5py.File(file_path, 'r') as f_h5:
                 file_name = os.path.splitext(os.path.basename(file_path))[0]
                 if output_path is not None:
@@ -673,12 +764,14 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8)
                 output_img = np.asarray(f_h5['output_images'], dtype=np.float32)
                 output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8)
+                # input_img = input_img * input_images_mask      ##########
+                # output_img = output_img * input_images_mask
                 print('input_img:',input_img.shape)
                 # mask-based crop
                 bbox,full_size = self.get_bbox_from_mask(input_images_mask)
                 input_img_crop = self.crop_with_bbox(input_img, bbox)
                 print('input_img_crop:',input_img_crop.shape)
-                # per slice
+                # per slice sampling
                 t1 = time.time()
                 pred_crop = self.diffusion_run_test(input_img=input_img_crop, sampler=sampler)[...,-1]
                 t2 = time.time()
@@ -699,11 +792,13 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                     print(f"Saved results to {save_h5_path}")
                 # metrics
                 mae = np.mean(np.abs(output_img - pred))
-                try:
-                    ssim_val = ssim(pred, output_img, data_range=1.0, channel_axis=None)
-                except Exception:
-                    ssim_val = np.nan
+                ssim_val = ssim(pred, output_img, data_range=1.0, channel_axis=None)
                 print(f"MAE: {mae:.4f}, SSIM: {ssim_val:.4f}, sampling time: {t2 - t1:.4f} s")
-        
+                if mode == 'valid':
+                    all_mae.append(mae)
+                    all_ssim.append(ssim_val)
+        if mode == 'valid':
+            return np.mean(all_mae), np.mean(all_ssim)
+
         print(f">>>>>>>>>>> Finish infer: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
 
