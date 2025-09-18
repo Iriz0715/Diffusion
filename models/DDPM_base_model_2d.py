@@ -159,10 +159,9 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8) if 'input_images_mask' in f_h5.keys() else np.zeros_like(input_img, dtype=np.uint8)
             output_img = np.asarray(f_h5['output_images'], dtype=np.float32)
             output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8) if 'output_images_mask' in f_h5.keys() else np.zeros_like(output_img, dtype=np.uint8)
-            # input_img = input_img * 2. - 1.  ############ Scale to [-1, 1]
-            # output_img = output_img * 2. - 1. ############ Scale to [-1, 1]
-            # input_img = input_img * input_images_mask   # mask if need
-            # output_img = output_img * output_images_mask
+            # mask if need
+            input_img = input_img * input_images_mask
+            output_img = output_img * output_images_mask
             full_size = input_img.shape[1:]
             results = []
             for i in range(input_img.shape[0]):
@@ -239,6 +238,12 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         return ds
 
     def build_global_slice_index(self, folder_path):
+        """
+        Prepared for dynamic_training_batch().
+        Returns:
+          slice_index (list): List of (file_path, z) tuples for all training slices.
+          file_bbox_dict (dict): Mapping from file_path to bounding box tuple.
+        """
         all_files = []
         if isinstance(folder_path, (list, tuple)):
             for single_folder in folder_path:
@@ -268,6 +273,17 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         return slice_index, file_bbox_dict
 
     def dynamic_training_batch(self, slice_index, file_bbox_dict, batch_size=8, shuffle=True):
+        """
+        Generator for dynamic batch training with global random sampling and dynamic padding.
+        Args:
+            slice_index (list): List of (file_path, z) tuples for all valid slices.
+            file_bbox_dict (dict): Mapping from file_path to bounding box tuple.
+            batch_size (int): Number of slices per batch.
+            shuffle (bool): Whether to shuffle the slice index before batching.
+        Yields:
+            batch_in (np.ndarray): Batch of input images, shape [batch, H, W, 1].
+            batch_out (np.ndarray): Batch of output images, shape [batch, H, W, 1].
+        """
         if shuffle:
             np.random.shuffle(slice_index)
         for start in range(0, len(slice_index), batch_size):
@@ -288,6 +304,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                     # output_img_crop = self.crop_pad2D(output_img, [512,512])
                     batch_in.append(input_img_crop)
                     batch_out.append(output_img_crop)
+            # 动态pad
             max_h = max(arr.shape[0] for arr in batch_in)
             max_w = max(arr.shape[1] for arr in batch_in)
             dividable_by = 2 ** self.layer_number
@@ -311,11 +328,6 @@ class DDPMBaseModel2D(tf.keras.models.Model):
 
     # pad to multiples of layers
     def read_testing_inputs(self, images):
-        #images = None
-        #targets = None
-
-        # Our 2D image dim standard is [batch(always=1 / maybe missing), h, w, channel(maybe missing)]
-        # In testing, we keep the batch dim
         if len(images.shape) == 4:
             full_size = list(images.shape)[1:-1]
         elif len(images.shape) == 3:
@@ -381,6 +393,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
 
 
 
+
     ''' >>>>>>>>>>>>>>>>>>> Train <<<<<<<<<<<<<<<<<<<<<<<<'''
     def diffusion_train(self, run_validation=False, validation_paths=None, **kwargs):
         print("Start Diffusion Training...")
@@ -413,6 +426,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
         train_data = self.get_training_dataset(self.training_paths, target_size=self.im_size,
                                            batch_size=self.batch_size, shuffle=True,
                                            patch=True)
+        ## use Dyna batch shape:
         # slice_index, file_bbox_dict = self.build_global_slice_index(self.training_paths)
         # print(f'Train slices: {len(slice_index)}')
 
@@ -441,7 +455,9 @@ class DDPMBaseModel2D(tf.keras.models.Model):
             print(f">>>>>>>>>>> Start training: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} <<<<<<<<<<<<")
             start_time_all = time.time()
             for epoch in range(self.counter, self.epoch):
-                # train_data = self.dynamic_training_batch(slice_index, file_bbox_dict, batch_size=self.batch_size, shuffle=True) # dyna batch shape
+                ### use Dyna batch shape
+                # train_data = self.dynamic_training_batch(slice_index, file_bbox_dict, batch_size=self.batch_size, shuffle=True)
+                
                 train_loss_metric = tf.keras.metrics.Mean()
                 iter_times = []
                 with tqdm(total=self.steps_per_epoch, ncols=100, desc=f"Epoch {epoch+1}", leave=False, disable=True) as pbar:
@@ -521,7 +537,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
     ''' >>>>>>>>>>>>>>>>>>> Valid <<<<<<<<<<<<<<<<<<<<<<<<<'''
     def validate_diffusion(self, validation_paths):
         avg_mae, avg_ssim = self.diffusion_infer_global(validation_paths, output_path=None, sampler='ddim', mode='valid')  # valid
-        # avg_mae_tr, avg_ssim_tr = self.diffusion_test_global('/mnt/newdisk/mri2ct/data_training/train_2_brain', output_path=None, sampler='ddim') # 2 train set if need
+        # avg_mae_tr, avg_ssim_tr = self.diffusion_test_global('/mnt/newdisk/mri2ct/data_training/train_2_brain', output_path=None, sampler='ddim', mode='valid') # 2 train set if need
         return {'mae': avg_mae, 'ssim': avg_ssim}
         
     ''' >>>>>>>>>>>>>>>>>>> Model Saver <<<<<<<<<<<<<<<<<<<<<<<<< '''
@@ -652,7 +668,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
 
     ''' >>>>>>>>>>>>>>>>>>> Inference <<<<<<<<<<<<<<<<<<<<<<<<<'''
     def diffusion_run_test(self, input_img, sampler='ddim', squeue=None, save_path=None):
-      all_images, info = self.read_testing_inputs(input_img)   # [d, h, w, channel],[d, h, w]
+      all_images, info = self.read_testing_inputs(input_img)   # [d, h, w, ch],[d, h, w]
       print('pad img:',all_images.shape)
       num_slices = all_images.shape[0] # d
       generated_list = []
@@ -724,7 +740,7 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 raise ValueError("model load failed.")
         
         if output_path is not None:
-            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}")
+            save_dir = os.path.join(output_path, f"result_2d_epoch_{self.counter}_mask")
             os.makedirs(save_dir, exist_ok=True)
 
         ## read data
@@ -763,8 +779,9 @@ class DDPMBaseModel2D(tf.keras.models.Model):
                 input_images_mask = np.asarray(f_h5['input_images_mask'], dtype=np.uint8)
                 output_img = np.asarray(f_h5['output_images'], dtype=np.float32)
                 output_images_mask = np.asarray(f_h5['output_images_mask'], dtype=np.uint8)
-                # input_img = input_img * input_images_mask      ##########
-                # output_img = output_img * input_images_mask
+                # If training set is multiplied by mask, test set should also be multiplied by mask here.
+                input_img = input_img * input_images_mask
+                output_img = output_img * input_images_mask
                 print('input_img:',input_img.shape)
                 # mask-based crop
                 bbox,full_size = self.get_bbox_from_mask(input_images_mask)
