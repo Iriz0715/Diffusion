@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 dir = 'DDPM/logs'
-mat = sio.loadmat(dir + '/ddpm_unet2d_all.mat')
+mat = sio.loadmat(dir + '/loss.mat')
 tr_ls = mat['loss'].flatten()
 
 start_epoch =10 
@@ -15,5 +15,5 @@ plt.title('Training Loss Curve (from epoch {})'.format(start_epoch))
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-plt.savefig(dir + '/train_loss_curve_brain2d_all.png')
+plt.savefig(dir + '/loss.png')
 plt.show()
