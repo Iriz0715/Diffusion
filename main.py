@@ -69,7 +69,7 @@ def main(config):
         raise Exception('Unsupported model')
     
     if final:
-        checkpoint_dir = identifier + '/checkpoint_2d_all'
+        checkpoint_dir = identifier + '/checkpoint'
         log_dir = identifier + '/logs'
         train_data_dir = dir + '/data_training/train'
         output_path = identifier + '/output/test'
@@ -167,7 +167,7 @@ def main(config):
         output_channels = 1
         model_config = {
             'epoch': 1000, 
-            'batch_size': 8,
+            'batch_size': 8, # if use dyna batch shape, batch_size = 2
             'iters_per_epoch': 4000,
             'save_period': 20,
             'optimizer_type': 'Adam',
